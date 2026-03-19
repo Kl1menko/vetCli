@@ -3,10 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SectionHeading } from "@/components/shared/section-heading";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { clinicProfile, clinicServices, getClinicServiceBySlug } from "@/constants/site";
 import { createPageMetadata } from "@/lib/metadata";
+import { cn } from "@/lib/utils";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -62,12 +63,15 @@ export default async function ServiceDetailsPage({ params }: Props) {
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button asChild>
-                <Link href="/booking">Записатися онлайн</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <a href={clinicProfile.phoneHref}>{clinicProfile.phone}</a>
-              </Button>
+              <Link href="/booking" className={buttonVariants()}>
+                Записатися онлайн
+              </Link>
+              <a
+                href={clinicProfile.phoneHref}
+                className={cn(buttonVariants({ variant: "outline" }))}
+              >
+                {clinicProfile.phone}
+              </a>
             </div>
           </CardContent>
         </Card>

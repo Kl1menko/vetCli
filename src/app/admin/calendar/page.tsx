@@ -13,6 +13,7 @@ import { requireAdminAccess } from "@/lib/auth/access";
 import { prisma } from "@/lib/prisma";
 import { getAvailableSlots } from "@/server/services/appointments/availability";
 import { cn } from "@/lib/utils";
+import type { AppointmentStatus } from "@/types/domain";
 
 const blockTypeLabel = {
   VACATION: "Відпустка",
@@ -47,6 +48,17 @@ export default async function AdminCalendarPage({
 }: {
   searchParams: Promise<{ doctorId?: string; date?: string; serviceId?: string }>;
 }) {
+  const appointmentStatuses: AppointmentStatus[] = [
+    "NEW",
+    "PENDING",
+    "CONFIRMED",
+    "RESCHEDULED",
+    "CANCELLED_BY_CLIENT",
+    "CANCELLED_BY_ADMIN",
+    "COMPLETED",
+    "NO_SHOW",
+  ];
+
   await requireAdminAccess();
 
   const { doctorId, date, serviceId } = await searchParams;
@@ -419,7 +431,7 @@ export default async function AdminCalendarPage({
                     <input name="date" type="date" defaultValue={appointment.date.toISOString().slice(0, 10)} className="h-10 rounded-lg border border-input px-3" />
                     <input name="startTime" type="time" defaultValue={appointment.startTime} className="h-10 rounded-lg border border-input px-3" />
                     <select name="status" defaultValue={appointment.status} className="h-10 rounded-lg border border-input px-3 md:col-span-2">
-                      {["NEW", "PENDING", "CONFIRMED", "RESCHEDULED", "CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN", "COMPLETED", "NO_SHOW"].map((status) => (
+                      {appointmentStatuses.map((status) => (
                         <option key={status} value={status}>
                           {appointmentStatusLabelMap[status]}
                         </option>

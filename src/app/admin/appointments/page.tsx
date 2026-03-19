@@ -13,12 +13,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { requireAdminAccess } from "@/lib/auth/access";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
+import type { AppointmentStatus } from "@/types/domain";
 
 export default async function AdminAppointmentsPage({
   searchParams,
 }: {
   searchParams: Promise<{ doctorId?: string; date?: string }>;
 }) {
+  const appointmentStatuses: AppointmentStatus[] = [
+    "NEW",
+    "PENDING",
+    "CONFIRMED",
+    "RESCHEDULED",
+    "CANCELLED_BY_CLIENT",
+    "CANCELLED_BY_ADMIN",
+    "COMPLETED",
+    "NO_SHOW",
+  ];
+
   await requireAdminAccess();
   const { doctorId, date } = await searchParams;
   const selectedDate = date ?? "";
@@ -180,16 +192,7 @@ export default async function AdminAppointmentsPage({
                   className="h-10 rounded-lg border border-input px-3"
                 />
                 <select name="status" defaultValue={appointment.status} className="h-10 rounded-lg border border-input px-3 md:col-span-2">
-                  {[
-                    "NEW",
-                    "PENDING",
-                    "CONFIRMED",
-                    "RESCHEDULED",
-                    "CANCELLED_BY_CLIENT",
-                    "CANCELLED_BY_ADMIN",
-                    "COMPLETED",
-                    "NO_SHOW",
-                  ].map((status) => (
+                  {appointmentStatuses.map((status) => (
                     <option key={status} value={status}>
                       {appointmentStatusLabelMap[status]}
                     </option>
