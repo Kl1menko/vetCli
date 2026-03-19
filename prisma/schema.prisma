@@ -1,0 +1,395 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  ADMIN
+  DOCTOR
+  SUPERADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+}
+
+enum PetSex {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum ScheduleBlockType {
+  VACATION
+  BREAK
+  MANUAL_BLOCK
+  EMERGENCY_RESERVE
+}
+
+enum AppointmentStatus {
+  NEW
+  PENDING
+  CONFIRMED
+  RESCHEDULED
+  CANCELLED_BY_CLIENT
+  CANCELLED_BY_ADMIN
+  COMPLETED
+  NO_SHOW
+}
+
+enum AppointmentSource {
+  PUBLIC_SITE
+  CLIENT_CABINET
+  ADMIN_MANUAL
+  PHONE_CALL
+}
+
+enum VisitStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum DiagnosisStatus {
+  ACTIVE
+  RESOLVED
+  CHRONIC
+}
+
+enum InvoicePaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum NotificationType {
+  GENERAL
+  APPOINTMENT_REMINDER
+  LAB_RESULT_READY
+  INVOICE_ISSUED
+}
+
+enum FileKind {
+  LAB_RESULT
+  DOCUMENT
+  VISIT_ATTACHMENT
+  INVOICE
+  MEDICAL_FILE
+}
+
+model User {
+  id              String          @id @default(cuid())
+  name            String?
+  email           String?         @unique
+  phone           String?         @unique
+  passwordHash    String?
+  emailVerified   DateTime?
+  image           String?
+  role            UserRole        @default(CLIENT)
+  status          UserStatus      @default(ACTIVE)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  ownerProfile    OwnerProfile?
+  doctorProfile   Doctor?
+  notifications   Notification[]
+  createdBookings Appointment[]   @relation("CreatedAppointments")
+  uploadedFiles   FileAsset[]     @relation("UploadedBy")
+  accounts        Account[]
+  sessions        Session[]
+  authenticators  Authenticator[]
+}
+
+model OwnerProfile {
+  id           String        @id @default(cuid())
+  userId       String        @unique
+  fullName     String
+  phone        String?
+  email        String?
+  address      String?
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pets         Pet[]
+  appointments Appointment[]
+}
+
+model Pet {
+  id                String        @id @default(cuid())
+  ownerId           String
+  name              String
+  photoUrl          String?
+  species           String
+  breed             String?
+  sex               PetSex        @default(UNKNOWN)
+  birthDate         DateTime?
+  weight            Decimal?      @db.Decimal(6, 2)
+  color             String?
+  microchipNumber   String?       @unique
+  isSterilized      Boolean       @default(false)
+  allergies         String?
+  chronicConditions String?
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  owner             OwnerProfile  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  appointments      Appointment[]
+  visits            Visit[]
+  vaccinations      Vaccination[]
+}
+
+model Doctor {
+  id             String           @id @default(cuid())
+  userId         String           @unique
+  fullName       String
+  specialization String
+  bio            String?
+  photoUrl       String?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedules      DoctorSchedule[]
+  blocks         ScheduleBlock[]
+  appointments   Appointment[]
+  visits         Visit[]
+}
+
+model Service {
+  id               String        @id @default(cuid())
+  name             String
+  slug             String        @unique
+  description      String
+  durationMinutes  Int
+  price            Decimal       @db.Decimal(10, 2)
+  category         String
+  isActive         Boolean       @default(true)
+  isOnlineBookable Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  appointments     Appointment[]
+}
+
+model DoctorSchedule {
+  id                  String   @id @default(cuid())
+  doctorId            String
+  weekday             Int
+  startTime           String
+  endTime             String
+  slotDurationMinutes Int
+  breakStart          String?
+  breakEnd            String?
+  isActive            Boolean  @default(true)
+  doctor              Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+}
+
+model ScheduleBlock {
+  id        String            @id @default(cuid())
+  doctorId  String
+  date      DateTime
+  startTime String
+  endTime   String
+  reason    String?
+  type      ScheduleBlockType
+  createdAt DateTime          @default(now())
+  doctor    Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  ownerId         String
+  petId           String
+  doctorId        String
+  serviceId       String
+  source          AppointmentSource
+  date            DateTime
+  startTime       String
+  endTime         String
+  status          AppointmentStatus @default(PENDING)
+  comment         String?
+  adminComment    String?
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  owner           OwnerProfile      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  pet             Pet               @relation(fields: [petId], references: [id], onDelete: Cascade)
+  doctor          Doctor            @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  service         Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  createdByUser   User?             @relation("CreatedAppointments", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  visit           Visit?
+
+  @@index([date, doctorId])
+  @@index([ownerId, date])
+}
+
+model Visit {
+  id              String           @id @default(cuid())
+  appointmentId   String           @unique
+  petId           String
+  doctorId        String
+  summary         String?
+  anamnesis       String?
+  examination     String?
+  recommendations String?
+  status          VisitStatus      @default(DRAFT)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  appointment     Appointment      @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  pet             Pet              @relation(fields: [petId], references: [id], onDelete: Cascade)
+  doctor          Doctor           @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  diagnoses       Diagnosis[]
+  prescriptions   Prescription[]
+  labResults      LabResult[]
+  attachments     FileAsset[]
+  invoice         Invoice?
+}
+
+model Diagnosis {
+  id          String          @id @default(cuid())
+  visitId      String
+  title       String
+  description String?
+  status      DiagnosisStatus @default(ACTIVE)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  visit       Visit           @relation(fields: [visitId], references: [id], onDelete: Cascade)
+}
+
+model Prescription {
+  id             String    @id @default(cuid())
+  visitId        String
+  medicationName String
+  dosage         String?
+  frequency      String?
+  duration       String?
+  instructions   String?
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  visit          Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+}
+
+model LabResult {
+  id        String     @id @default(cuid())
+  visitId    String
+  title     String
+  fileUrl   String
+  comment   String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  visit     Visit      @relation(fields: [visitId], references: [id], onDelete: Cascade)
+}
+
+model Vaccination {
+  id          String    @id @default(cuid())
+  petId       String
+  title       String
+  date        DateTime
+  nextDueDate DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  pet         Pet       @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id            String               @id @default(cuid())
+  visitId        String               @unique
+  totalAmount   Decimal              @db.Decimal(10, 2)
+  paymentStatus InvoicePaymentStatus @default(UNPAID)
+  fileUrl       String?
+  note          String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  visit         Visit                @relation(fields: [visitId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId     String
+  type      NotificationType @default(GENERAL)
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FileAsset {
+  id               String    @id @default(cuid())
+  visitId          String?
+  uploadedByUserId String?
+  kind             FileKind
+  originalName     String
+  fileUrl          String
+  mimeType         String
+  sizeBytes        Int
+  note             String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  visit            Visit?    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  uploadedByUser   User?     @relation("UploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([kind, createdAt])
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionToken])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, credentialID])
+}
