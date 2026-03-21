@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -79,7 +80,7 @@ export default async function AdminVisitsPage({
   const selectedDoctorId = doctorId ?? "";
   const selectedStatus = status ?? "";
 
-  const where = {
+  const where: Prisma.VisitWhereInput = {
     ...(selectedDoctorId ? { doctorId: selectedDoctorId } : {}),
     ...(selectedStatus === "DRAFT" || selectedStatus === "IN_PROGRESS" || selectedStatus === "COMPLETED"
       ? { status: selectedStatus }

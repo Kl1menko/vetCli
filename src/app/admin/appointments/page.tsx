@@ -44,6 +44,7 @@ export default async function AdminAppointmentsPage({
       pet: true,
       doctor: true,
       service: true,
+      visit: true,
     },
     take: 50,
   });
