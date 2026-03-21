@@ -4,11 +4,13 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCabinetAccess } from "@/lib/auth/access";
+import { markCabinetNotificationsAsRead } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
 export default async function CabinetLabResultsPage() {
   const session = await requireCabinetAccess();
+  await markCabinetNotificationsAsRead(session.user.id, "lab-results");
   const [labResults, attachments] = await Promise.all([
     prisma.labResult.findMany({
       where: {
@@ -31,6 +33,9 @@ export default async function CabinetLabResultsPage() {
     }),
     prisma.fileAsset.findMany({
       where: {
+        kind: {
+          in: ["VISIT_ATTACHMENT", "MEDICAL_FILE", "DOCUMENT"],
+        },
         visit: {
           pet: {
             owner: {
@@ -49,6 +54,7 @@ export default async function CabinetLabResultsPage() {
       orderBy: { createdAt: "desc" },
     }),
   ]);
+  const hasAnyFiles = labResults.length > 0 || attachments.length > 0;
 
   return (
     <div className="grid gap-6">
@@ -56,10 +62,10 @@ export default async function CabinetLabResultsPage() {
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-              Усі аналізи та файли після прийому зібрані в одному місці.
+              Аналізи і файли після прийомів.
             </h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              Не потрібно шукати результати по всій історії візитів, усе важливе лежить тут.
+              Усі результати і вкладення в одному розділі.
             </p>
           </div>
           <Link href="/cabinet/visits" className={cn(buttonVariants({ variant: "outline" }), "rounded-full px-5")}>
@@ -87,7 +93,7 @@ export default async function CabinetLabResultsPage() {
           ) : (
             <EmptyState
               title="Результатів поки немає"
-              description="Коли лікар додасть аналізи, вони одразу з’являться в цьому розділі."
+              description="Нові результати з’являться тут."
             />
           )}
         </CardContent>
@@ -110,7 +116,14 @@ export default async function CabinetLabResultsPage() {
               </div>
             ))
           ) : (
-            <EmptyState title="Файлів поки немає" description="Коли лікар додасть вкладення після прийому, вони з’являться тут." />
+            <EmptyState
+              title={hasAnyFiles ? "Окремих вкладень поки немає" : "Файлів поки немає"}
+              description={
+                hasAnyFiles
+                  ? "Файли аналізів уже доступні вище. Додаткові вкладення з’являться окремо."
+                  : "Файли з’являться після додавання лікарем."
+              }
+            />
           )}
         </CardContent>
       </Card>

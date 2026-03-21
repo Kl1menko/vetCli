@@ -13,6 +13,8 @@ import {
   VisitAttachmentForm,
   VisitDetailsForm,
 } from "@/components/forms/doctor-visit-forms";
+import { VisitDischargeCard } from "@/components/shared/visit-discharge-card";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireDoctorAccess } from "@/lib/auth/access";
@@ -26,6 +28,46 @@ import {
   updateVisitDetailsAction,
 } from "@/server/actions/doctor";
 import { cn } from "@/lib/utils";
+
+const visitStatusLabelMap = {
+  DRAFT: "Чернетка",
+  IN_PROGRESS: "У роботі",
+  COMPLETED: "Завершено",
+} as const;
+
+function DoctorVisitStateBadge({
+  status,
+  wasNewOnOpen,
+}: {
+  status: keyof typeof visitStatusLabelMap;
+  wasNewOnOpen: boolean;
+}) {
+  if (status === "COMPLETED") {
+    return (
+      <Badge variant="secondary" className="border-transparent bg-slate-200 text-slate-800">
+        Візит закрито
+      </Badge>
+    );
+  }
+
+  if (wasNewOnOpen) {
+    return (
+      <Badge variant="secondary" className="border-transparent bg-[#e7efff] text-[#214fbd]">
+        Новий візит
+      </Badge>
+    );
+  }
+
+  if (status === "IN_PROGRESS") {
+    return (
+      <Badge variant="secondary" className="border-transparent bg-amber-100 text-amber-900">
+        У роботі
+      </Badge>
+    );
+  }
+
+  return null;
+}
 
 export default async function DoctorVisitPage({
   params,
@@ -49,6 +91,7 @@ export default async function DoctorVisitPage({
       },
       appointment: {
         include: {
+          doctor: true,
           service: true,
         },
       },
@@ -72,11 +115,47 @@ export default async function DoctorVisitPage({
     notFound();
   }
 
+  const wasNewOnOpen = visit.status === "DRAFT";
+
+  if (wasNewOnOpen) {
+    await prisma.visit.update({
+      where: { id: visit.id },
+      data: {
+        status: "IN_PROGRESS",
+      },
+    });
+    visit.status = "IN_PROGRESS";
+  }
+
+  const visitDetails = {
+    id: visit.id,
+    summary: visit.summary,
+    anamnesis: visit.anamnesis,
+    examination: visit.examination,
+    recommendations: visit.recommendations,
+    status: visit.status,
+  } as const;
+
+  const invoice = visit.invoice
+    ? {
+        totalAmount: visit.invoice.totalAmount.toString(),
+        paymentStatus: visit.invoice.paymentStatus,
+        fileUrl: visit.invoice.fileUrl,
+        note: visit.invoice.note,
+      }
+    : null;
+
   return (
     <div className="grid gap-6">
       <Card className="border-[#cfe8df] bg-[linear-gradient(135deg,#f4fcfa_0%,#eaf7f3_100%)]">
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
+            <div className="mb-3 flex flex-wrap gap-2">
+              <DoctorVisitStateBadge
+                status={visit.status}
+                wasNewOnOpen={wasNewOnOpen}
+              />
+            </div>
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">
               {visit.pet.name} · {visit.appointment.service.name}
             </h2>
@@ -99,7 +178,7 @@ export default async function DoctorVisitPage({
         <CardHeader>
           <CardTitle>Коротко про прийом</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div>
             <p className="text-sm text-muted-foreground">Власник</p>
             <p className="font-medium">{visit.pet.owner.fullName}</p>
@@ -114,7 +193,16 @@ export default async function DoctorVisitPage({
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Статус візиту</p>
-            <p className="font-medium">{visit.status}</p>
+            <p className="font-medium">{visitStatusLabelMap[visit.status]}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Стан для лікаря</p>
+            <div className="mt-1">
+              <DoctorVisitStateBadge
+                status={visit.status}
+                wasNewOnOpen={wasNewOnOpen}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -124,7 +212,7 @@ export default async function DoctorVisitPage({
           <CardTitle>Що було на прийомі</CardTitle>
         </CardHeader>
         <CardContent>
-          <VisitDetailsForm visit={visit} action={updateVisitDetailsAction} />
+          <VisitDetailsForm visit={visitDetails} action={updateVisitDetailsAction} />
         </CardContent>
       </Card>
 
@@ -164,7 +252,7 @@ export default async function DoctorVisitPage({
             <CardTitle>Оплата</CardTitle>
           </CardHeader>
           <CardContent>
-            <InvoiceForm visitId={visit.id} invoice={visit.invoice} action={upsertInvoiceAction} />
+            <InvoiceForm visitId={visit.id} invoice={invoice} action={upsertInvoiceAction} />
           </CardContent>
         </Card>
 
@@ -178,6 +266,12 @@ export default async function DoctorVisitPage({
           </CardContent>
         </Card>
       </div>
+
+      <VisitDischargeCard
+        visit={visit}
+        title="Як це побачить клієнт у кабінеті"
+        className="border-[#d9e4ff] bg-[linear-gradient(180deg,#f7fbff_0%,#ffffff_100%)]"
+      />
     </div>
   );
 }

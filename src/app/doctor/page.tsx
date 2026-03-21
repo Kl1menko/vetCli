@@ -30,6 +30,7 @@ export default async function DoctorPage() {
         }),
         prisma.pet.count({
           where: {
+            isArchived: false,
             appointments: {
               some: {
                 doctorId: doctor.id,
@@ -63,7 +64,7 @@ export default async function DoctorPage() {
 
   return (
     <div className="grid gap-6">
-      <Card className="border-[#cfe8df] bg-[linear-gradient(135deg,#f4fcfa_0%,#eaf7f3_100%)] shadow-[0_28px_60px_-44px_rgba(18,131,111,0.25)]">
+      <Card className="border-[#cfe1da] bg-[linear-gradient(135deg,#eaf4f0_0%,#e1ede9_100%)] shadow-[0_28px_60px_-44px_rgba(18,131,111,0.18)]">
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">
@@ -91,7 +92,7 @@ export default async function DoctorPage() {
           ["Пацієнти за 7 днів", String(patientsThisWeek)],
           ["Відкриті візити", String(openVisits)],
         ].map(([title, value]) => (
-          <Card key={title} className="border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fcfefd_100%)]">
+          <Card key={title} className="border-[#d4e0db] bg-[linear-gradient(180deg,#f7faf8_0%,#edf4f1_100%)]">
             <CardHeader>
               <CardTitle className="text-sm font-medium text-slate-500">{title}</CardTitle>
             </CardHeader>
@@ -101,7 +102,7 @@ export default async function DoctorPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="border-slate-200/80 bg-white">
+        <Card className="border-[#d6e0db] bg-[linear-gradient(180deg,#f7faf8_0%,#eef4f1_100%)]">
           <CardHeader>
             <CardTitle>З чого почати</CardTitle>
           </CardHeader>
@@ -111,7 +112,7 @@ export default async function DoctorPage() {
               ["Картки пацієнтів", "Із записів можна одразу відкрити пацієнта або створити візит без зайвих кроків."],
               ["Незавершені візити", "Краще закривати їх того ж дня, щоб клієнт одразу бачив результати у своєму кабінеті."],
             ].map(([title, text]) => (
-              <div key={title} className="rounded-[1.35rem] border border-slate-200 bg-slate-50 p-4">
+              <div key={title} className="rounded-[1.35rem] border border-[#d8e3de] bg-[#f1f6f3] p-4">
                 <p className="text-sm font-medium text-slate-950">{title}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-500">{text}</p>
               </div>
@@ -119,11 +120,11 @@ export default async function DoctorPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 bg-slate-950 text-white">
+        <Card className="border-[#c6ddd7] bg-[linear-gradient(180deg,#dcece7_0%,#cfe3dd_100%)] text-slate-950">
           <CardHeader>
-            <CardTitle className="text-white">Що важливо сьогодні</CardTitle>
+            <CardTitle className="text-slate-950">Що важливо сьогодні</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm leading-7 text-white/72">
+          <CardContent className="space-y-3 text-sm leading-7 text-slate-700">
             <p>Після завершення візиту клієнт одразу бачить історію лікування, призначення, аналізи та рахунок, тому записи мають бути зрозумілими й повними.</p>
             <p>Розділи ліворуч допомагають не губити контекст і швидко перемикатися між розкладом, прийомами та пацієнтами.</p>
           </CardContent>

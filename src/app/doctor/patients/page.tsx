@@ -27,6 +27,7 @@ export default async function DoctorPatientsPage({
 
   const pets = await prisma.pet.findMany({
     where: {
+      isArchived: false,
       OR: [
         { appointments: { some: { doctorId: doctor.id } } },
         { visits: { some: { doctorId: doctor.id } } },

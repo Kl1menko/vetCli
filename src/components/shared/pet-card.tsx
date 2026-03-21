@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   Bird,
   CalendarDays,
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 type PetCardProps = {
   href?: string;
+  headerActions?: ReactNode;
   name: string;
   species: string;
   breed: string;
@@ -84,6 +86,7 @@ function getSpeciesPresentation(species: string): {
 
 export function PetCard({
   href,
+  headerActions,
   name,
   species,
   breed,
@@ -98,31 +101,34 @@ export function PetCard({
   return (
     <Card className={cn("h-full min-w-0 overflow-hidden rounded-[2rem]", shellClassName)}>
       <CardHeader className="gap-4 pb-2">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-1 items-start gap-4">
-            <div className={cn("flex size-12 shrink-0 items-center justify-center rounded-[1.2rem]", badgeClassName)}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className={cn("flex size-12 shrink-0 items-center justify-center rounded-[1.2rem] sm:size-12", badgeClassName)}>
               <Icon className="size-5" />
             </div>
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-[1.55rem] font-semibold leading-none tracking-[-0.04em] text-slate-950 md:text-[1.75rem]">
+              <CardTitle className="break-words text-[1.9rem] font-semibold leading-[0.95] tracking-[-0.05em] text-slate-950 sm:text-[1.55rem] md:text-[1.75rem]">
                 {name}
               </CardTitle>
-              <p className="text-sm leading-6 text-slate-500">
+              <p className="text-sm leading-6 text-slate-500 break-words">
                 {species} · {breed}
               </p>
             </div>
           </div>
-          {href ? (
-            <Link
-              href={href}
-              className={cn(
-                buttonVariants({ variant: "outline", size: "sm" }),
-                "h-11 shrink-0 rounded-full border-slate-300/90 bg-white/90 px-5 text-slate-800 hover:border-slate-400 hover:bg-white",
-              )}
-            >
-              Картка
-            </Link>
-          ) : null}
+          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:shrink-0">
+            {headerActions}
+            {href ? (
+              <Link
+                href={href}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "h-10 w-full rounded-full border-slate-300/90 bg-white/90 px-4 text-center text-slate-800 hover:border-slate-400 hover:bg-white sm:h-11 sm:min-w-[148px] sm:px-5",
+                )}
+              >
+                Картка
+              </Link>
+            ) : null}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-4 pt-0 text-sm text-slate-500">

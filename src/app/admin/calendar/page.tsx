@@ -1,19 +1,20 @@
 import {
-  createAdminAppointmentAction,
   createScheduleBlockAction,
   deleteScheduleBlockAction,
   updateAppointmentAction,
   updateAppointmentStatusAction,
   updateScheduleBlockAction,
 } from "@/server/actions/admin";
+import { AdminAppointmentCreateForm } from "@/components/forms/admin-appointment-create-form";
+import { EmptyState } from "@/components/shared/empty-state";
 import { appointmentStatusLabelMap, StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAdminAccess } from "@/lib/auth/access";
+import { getAdminEditableAppointmentStatuses } from "@/lib/appointments";
 import { prisma } from "@/lib/prisma";
 import { getAvailableSlots } from "@/server/services/appointments/availability";
 import { cn } from "@/lib/utils";
-import type { AppointmentStatus } from "@/types/domain";
 
 const blockTypeLabel = {
   VACATION: "Відпустка",
@@ -48,56 +49,67 @@ export default async function AdminCalendarPage({
 }: {
   searchParams: Promise<{ doctorId?: string; date?: string; serviceId?: string }>;
 }) {
-  const appointmentStatuses: AppointmentStatus[] = [
-    "NEW",
-    "PENDING",
-    "CONFIRMED",
-    "RESCHEDULED",
-    "CANCELLED_BY_CLIENT",
-    "CANCELLED_BY_ADMIN",
-    "COMPLETED",
-    "NO_SHOW",
-  ];
-
   await requireAdminAccess();
 
   const { doctorId, date, serviceId } = await searchParams;
   const selectedDate = date ?? new Date().toISOString().slice(0, 10);
+  const selectedDoctorId = doctorId ?? "ALL";
+  const selectedServiceId = serviceId ?? "ALL";
+  const isAllDoctorsView = selectedDoctorId === "ALL";
+  const isAllServicesView = selectedServiceId === "ALL";
 
   const [owners, pets, doctors, services] = await Promise.all([
     prisma.ownerProfile.findMany({ orderBy: { fullName: "asc" } }),
-    prisma.pet.findMany({ orderBy: { name: "asc" }, include: { owner: true } }),
+    prisma.pet.findMany({ where: { isArchived: false }, orderBy: { name: "asc" }, include: { owner: true } }),
     prisma.doctor.findMany({ where: { isActive: true }, orderBy: { fullName: "asc" } }),
     prisma.service.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
 
-  const selectedDoctorId = doctorId ?? doctors[0]?.id;
-  const selectedServiceId = serviceId ?? services[0]?.id;
-  const [appointments, schedule, blocks, selectedService] = selectedDoctorId
+  const doctorIdForMutations = isAllDoctorsView ? doctors[0]?.id : selectedDoctorId;
+  const serviceIdForMutations = isAllServicesView ? services[0]?.id : selectedServiceId;
+  const selectedWeekday = new Date(selectedDate).getDay() || 7;
+  const [appointments, schedule, blocks, selectedService, daySchedules] = doctorIdForMutations
     ? await Promise.all([
         prisma.appointment.findMany({
           where: {
             date: new Date(selectedDate),
-            doctorId: selectedDoctorId,
+            ...(isAllDoctorsView ? {} : { doctorId: selectedDoctorId }),
           },
           include: { owner: true, pet: true, doctor: true, service: true },
-          orderBy: { startTime: "asc" },
+          orderBy: [{ doctor: { fullName: "asc" } }, { startTime: "asc" }],
         }),
-        prisma.doctorSchedule.findFirst({
-          where: { doctorId: selectedDoctorId, weekday: new Date(selectedDate).getDay() || 7 },
-        }),
+        isAllDoctorsView
+          ? Promise.resolve(null)
+          : prisma.doctorSchedule.findFirst({
+              where: { doctorId: selectedDoctorId, weekday: selectedWeekday },
+            }),
         prisma.scheduleBlock.findMany({
-          where: { doctorId: selectedDoctorId, date: new Date(selectedDate) },
-          orderBy: { startTime: "asc" },
+          where: {
+            date: new Date(selectedDate),
+            ...(isAllDoctorsView ? {} : { doctorId: selectedDoctorId }),
+          },
+          include: {
+            doctor: true,
+          },
+          orderBy: [{ doctor: { fullName: "asc" } }, { startTime: "asc" }],
         }),
-        selectedServiceId
+        serviceIdForMutations && !isAllServicesView
           ? prisma.service.findUnique({
-              where: { id: selectedServiceId },
+              where: { id: serviceIdForMutations },
               select: { id: true, durationMinutes: true, name: true },
             })
           : null,
+        prisma.doctorSchedule.findMany({
+          where: {
+            weekday: selectedWeekday,
+            doctorId: {
+              in: doctors.map((doctor) => doctor.id),
+            },
+          },
+          orderBy: [{ doctor: { fullName: "asc" } }],
+        }),
       ])
-    : [[], null, [], null];
+    : [[], null, [], null, []];
 
   const stepMinutes = schedule?.slotDurationMinutes ?? 30;
   const timelineStart = schedule?.startTime ?? "09:00";
@@ -108,7 +120,7 @@ export default async function AdminCalendarPage({
   const timelineDuration = Math.max(timelineEndMinutes - timelineStartMinutes, stepMinutes);
 
   const availableSlots =
-    schedule && selectedDoctorId && selectedService
+    schedule && !isAllDoctorsView && !isAllServicesView && selectedService
       ? getAvailableSlots({
           serviceDurationMinutes: selectedService.durationMinutes,
           workingStart: schedule.startTime,
@@ -155,6 +167,21 @@ export default async function AdminCalendarPage({
     };
   });
 
+  const schedulesByDoctorId = new Map(daySchedules.map((schedule) => [schedule.doctorId, schedule]));
+  const appointmentsByDoctorId = new Map<string, typeof appointments>();
+  const blocksByDoctorId = new Map<string, typeof blocks>();
+
+  for (const doctor of doctors) {
+    appointmentsByDoctorId.set(
+      doctor.id,
+      appointments.filter((appointment) => appointment.doctorId === doctor.id),
+    );
+    blocksByDoctorId.set(
+      doctor.id,
+      blocks.filter((block) => block.doctorId === doctor.id),
+    );
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="grid gap-6">
@@ -165,6 +192,7 @@ export default async function AdminCalendarPage({
           <CardContent>
             <form className="grid gap-4 md:grid-cols-3">
               <select name="doctorId" defaultValue={selectedDoctorId} className="h-10 rounded-lg border border-input px-3">
+                <option value="ALL">Усі лікарі клініки</option>
                 {doctors.map((doctor) => (
                   <option key={doctor.id} value={doctor.id}>
                     {doctor.fullName}
@@ -173,6 +201,7 @@ export default async function AdminCalendarPage({
               </select>
               <input name="date" type="date" defaultValue={selectedDate} className="h-10 rounded-lg border border-input px-3" />
               <select name="serviceId" defaultValue={selectedServiceId} className="h-10 rounded-lg border border-input px-3">
+                <option value="ALL">Усі послуги</option>
                 {services.map((service) => (
                   <option key={service.id} value={service.id}>
                     {service.name}
@@ -191,40 +220,20 @@ export default async function AdminCalendarPage({
             <CardTitle>Додати запис вручну</CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={createAdminAppointmentAction} className="grid gap-4">
-              <select name="ownerId" className="h-10 rounded-lg border border-input px-3">
-                {owners.map((owner) => (
-                  <option key={owner.id} value={owner.id}>
-                    {owner.fullName}
-                  </option>
-                ))}
-              </select>
-              <select name="petId" className="h-10 rounded-lg border border-input px-3">
-                {pets.map((pet) => (
-                  <option key={pet.id} value={pet.id}>
-                    {pet.name} · {pet.owner.fullName}
-                  </option>
-                ))}
-              </select>
-              <select name="doctorId" className="h-10 rounded-lg border border-input px-3" defaultValue={selectedDoctorId}>
-                {doctors.map((doctor) => (
-                  <option key={doctor.id} value={doctor.id}>
-                    {doctor.fullName}
-                  </option>
-                ))}
-              </select>
-              <select name="serviceId" className="h-10 rounded-lg border border-input px-3" defaultValue={selectedServiceId}>
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
-              <input name="date" type="date" defaultValue={selectedDate} className="h-10 rounded-lg border border-input px-3" />
-              <input name="startTime" type="time" className="h-10 rounded-lg border border-input px-3" />
-              <textarea name="comment" placeholder="Коментар адміністратора" className="min-h-24 rounded-lg border border-input px-3 py-2" />
-              <Button type="submit">Створити запис</Button>
-            </form>
+            <AdminAppointmentCreateForm
+              owners={owners}
+              pets={pets.map((pet) => ({
+                id: pet.id,
+                name: pet.name,
+                ownerId: pet.ownerId,
+                ownerName: pet.owner.fullName,
+              }))}
+              doctors={doctors}
+              services={services}
+              selectedDate={selectedDate}
+              selectedDoctorId={doctorIdForMutations}
+              selectedServiceId={serviceIdForMutations}
+            />
           </CardContent>
         </Card>
 
@@ -234,7 +243,7 @@ export default async function AdminCalendarPage({
           </CardHeader>
           <CardContent>
             <form action={createScheduleBlockAction} className="grid gap-4 md:grid-cols-2">
-              <select name="doctorId" defaultValue={selectedDoctorId} className="h-10 rounded-lg border border-input px-3">
+              <select name="doctorId" defaultValue={doctorIdForMutations} className="h-10 rounded-lg border border-input px-3">
                 {doctors.map((doctor) => (
                   <option key={doctor.id} value={doctor.id}>
                     {doctor.fullName}
@@ -269,7 +278,9 @@ export default async function AdminCalendarPage({
               <div>
                 <p className="text-sm text-muted-foreground">Лікар</p>
                 <p className="font-medium">
-                  {doctors.find((doctor) => doctor.id === selectedDoctorId)?.fullName ?? "Не обрано"}
+                  {isAllDoctorsView
+                    ? "Уся клініка"
+                    : doctors.find((doctor) => doctor.id === selectedDoctorId)?.fullName ?? "Не обрано"}
                 </p>
               </div>
               <div>
@@ -277,13 +288,13 @@ export default async function AdminCalendarPage({
                 <p className="font-medium">{new Date(selectedDate).toLocaleDateString("uk-UA")}</p>
               </div>
               <div>
-                  <p className="text-sm text-muted-foreground">Послуга для вільних слотів</p>
-                <p className="font-medium">{selectedService?.name ?? "Не обрано"}</p>
+                <p className="text-sm text-muted-foreground">Послуга для вільних слотів</p>
+                <p className="font-medium">{isAllServicesView ? "Усі послуги" : selectedService?.name ?? "Не обрано"}</p>
               </div>
             </div>
 
             <div className="rounded-[2rem] border border-border/70 bg-background p-4">
-              {schedule ? (
+              {!isAllDoctorsView && schedule ? (
                 <div className="grid grid-cols-[72px_1fr] gap-4">
                   <div className="relative">
                     {timelineScale.map((time, index) => (
@@ -374,9 +385,108 @@ export default async function AdminCalendarPage({
                     ))}
                   </div>
                 </div>
+              ) : isAllDoctorsView ? (
+                doctors.length ? (
+                  <div className="grid gap-4">
+                    <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+                      Тут видно загальну картину по клініці на день. Для точного таймлайну та вільних слотів виберіть конкретного лікаря і конкретну послугу у фільтрі зверху.
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {doctors.map((doctor) => {
+                        const doctorAppointments = appointmentsByDoctorId.get(doctor.id) ?? [];
+                        const doctorBlocks = blocksByDoctorId.get(doctor.id) ?? [];
+                        const doctorSchedule = schedulesByDoctorId.get(doctor.id);
+
+                        return (
+                          <div
+                            key={doctor.id}
+                            className="rounded-[1.5rem] border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)] p-4 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)]"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-lg font-semibold tracking-[-0.03em] text-slate-950">{doctor.fullName}</p>
+                                <p className="text-sm text-slate-500">{doctor.specialization}</p>
+                              </div>
+                              <span
+                                className={cn(
+                                  "inline-flex rounded-full px-3 py-1 text-xs font-medium",
+                                  doctorSchedule?.isActive
+                                    ? "bg-emerald-100 text-emerald-900"
+                                    : "bg-slate-200 text-slate-700",
+                                )}
+                              >
+                                {doctorSchedule?.isActive ? "У графіку" : "Без графіка"}
+                              </span>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Зміна</p>
+                                <p className="mt-2 text-sm font-medium text-slate-950">
+                                  {doctorSchedule ? `${doctorSchedule.startTime}–${doctorSchedule.endTime}` : "Не задано"}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Записів</p>
+                                <p className="mt-2 text-sm font-medium text-slate-950">{doctorAppointments.length}</p>
+                              </div>
+                              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Блоків</p>
+                                <p className="mt-2 text-sm font-medium text-slate-950">{doctorBlocks.length}</p>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-3">
+                              {doctorAppointments.length ? (
+                                doctorAppointments.map((appointment) => (
+                                  <div key={appointment.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-950">
+                                          {appointment.startTime}–{appointment.endTime} · {appointment.pet.name}
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-600">
+                                          {appointment.service.name} · {appointment.owner.fullName}
+                                        </p>
+                                      </div>
+                                      <StatusBadge status={appointment.status} />
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-sm text-slate-500">На цю дату записів немає.</p>
+                              )}
+
+                              {doctorBlocks.length ? (
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
+                                  <p className="text-sm font-medium text-amber-950">Блокування дня</p>
+                                  <div className="mt-2 grid gap-2">
+                                    {doctorBlocks.map((block) => (
+                                      <p key={block.id} className="text-sm text-amber-900/90">
+                                        {block.startTime}–{block.endTime} · {blockTypeLabel[block.type]}
+                                        {block.reason ? ` · ${block.reason}` : ""}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="У клініці ще немає активних лікарів"
+                    description="Після створення профілів лікарів тут з’явиться загальний календар по всій клініці."
+                  />
+                )
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  На цю дату в лікаря немає активного графіка, тому календар на день не показується.
+                  {isAllServicesView
+                    ? "Для показу вільних слотів виберіть конкретну послугу у фільтрі зверху."
+                    : "На цю дату в лікаря немає активного графіка, тому календар на день не показується."}
                 </p>
               )}
             </div>
@@ -384,7 +494,9 @@ export default async function AdminCalendarPage({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Записи на {new Date(selectedDate).toLocaleDateString("uk-UA")}</CardTitle>
+            <CardTitle>
+              {isAllDoctorsView ? "Усі записи клініки" : "Записи на"} {new Date(selectedDate).toLocaleDateString("uk-UA")}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {appointments.length ? appointments.map((appointment) => (
@@ -399,17 +511,15 @@ export default async function AdminCalendarPage({
                   </div>
                 </summary>
                 <div className="mt-4 grid gap-3">
-                  <form action={updateAppointmentStatusAction}>
-                    <input type="hidden" name="appointmentId" value={appointment.id} />
-                    <input
-                      type="hidden"
-                      name="status"
-                      value={appointment.status === "CONFIRMED" ? "COMPLETED" : "CONFIRMED"}
-                    />
-                    <Button type="submit" variant="ghost" size="sm">
-                      {appointment.status === "CONFIRMED" ? "Завершити" : "Підтвердити"}
-                    </Button>
-                  </form>
+                  {["NEW", "PENDING", "RESCHEDULED"].includes(appointment.status) ? (
+                    <form action={updateAppointmentStatusAction}>
+                      <input type="hidden" name="appointmentId" value={appointment.id} />
+                      <input type="hidden" name="status" value="CONFIRMED" />
+                      <Button type="submit" variant="ghost" size="sm">
+                        Підтвердити
+                      </Button>
+                    </form>
+                  ) : null}
                   <form action={updateAppointmentAction} className="grid gap-3 md:grid-cols-2">
                     <input type="hidden" name="appointmentId" value={appointment.id} />
                     <input type="hidden" name="ownerId" value={appointment.ownerId} />
@@ -431,7 +541,7 @@ export default async function AdminCalendarPage({
                     <input name="date" type="date" defaultValue={appointment.date.toISOString().slice(0, 10)} className="h-10 rounded-lg border border-input px-3" />
                     <input name="startTime" type="time" defaultValue={appointment.startTime} className="h-10 rounded-lg border border-input px-3" />
                     <select name="status" defaultValue={appointment.status} className="h-10 rounded-lg border border-input px-3 md:col-span-2">
-                      {appointmentStatuses.map((status) => (
+                      {getAdminEditableAppointmentStatuses(appointment.status).map((status) => (
                         <option key={status} value={status}>
                           {appointmentStatusLabelMap[status]}
                         </option>
@@ -446,12 +556,14 @@ export default async function AdminCalendarPage({
                   </form>
                 </div>
               </details>
-            )) : <p className="text-sm text-muted-foreground">На цю дату записів у вибраного лікаря немає.</p>}
+            )) : <p className="text-sm text-muted-foreground">
+              {isAllDoctorsView ? "На цю дату в клініці записів немає." : "На цю дату записів у вибраного лікаря немає."}
+            </p>}
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Який час уже закрито</CardTitle>
+            <CardTitle>{isAllDoctorsView ? "Усі блокування по клініці" : "Який час уже закрито"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {blocks.length ? blocks.map((block) => (
@@ -459,8 +571,12 @@ export default async function AdminCalendarPage({
                 <summary className="cursor-pointer">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="font-medium">{block.startTime}–{block.endTime} · {blockTypeLabel[block.type]}</p>
-                      <p className="text-sm text-muted-foreground">{block.reason ?? "Без причини"}</p>
+                      <p className="font-medium">
+                        {block.startTime}–{block.endTime} · {blockTypeLabel[block.type]}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {block.doctor.fullName} · {block.reason ?? "Без причини"}
+                      </p>
                     </div>
                   </div>
                 </summary>
@@ -487,7 +603,9 @@ export default async function AdminCalendarPage({
                   </form>
                 </div>
               </details>
-            )) : <p className="text-sm text-muted-foreground">На цю дату закритих слотів немає.</p>}
+            )) : <p className="text-sm text-muted-foreground">
+              {isAllDoctorsView ? "На цю дату по клініці закритих слотів немає." : "На цю дату закритих слотів немає."}
+            </p>}
           </CardContent>
         </Card>
       </div>

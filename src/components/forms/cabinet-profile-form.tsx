@@ -31,35 +31,60 @@ export function CabinetProfileForm({ action, profile }: CabinetProfileFormProps)
   });
 
   return (
-    <form action={formAction} className="grid gap-4 md:grid-cols-2">
-      <div className="flex flex-col gap-2">
+    <form action={formAction} className="grid gap-3 md:grid-cols-2">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="profile-fullName">Ім&apos;я та прізвище</Label>
-        <Input id="profile-fullName" name="fullName" defaultValue={profile.fullName} placeholder="Олена Бойко" />
+        <Input
+          id="profile-fullName"
+          name="fullName"
+          defaultValue={profile.fullName}
+          placeholder="Олена Бойко"
+          className="h-10"
+        />
+        <p className="text-xs text-muted-foreground">Так, як вас мають ідентифікувати адміністратори та лікарі клініки.</p>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="profile-phone">Телефон</Label>
-        <Input id="profile-phone" name="phone" defaultValue={profile.phone ?? ""} placeholder="+380..." />
+        <Input id="profile-phone" name="phone" defaultValue={profile.phone ?? ""} placeholder="+380..." className="h-10" />
+        <p className="text-xs text-muted-foreground">Номер для підтвердження записів і швидкого зв&apos;язку.</p>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="profile-email">Email</Label>
-        <Input id="profile-email" name="email" type="email" defaultValue={profile.email ?? ""} placeholder="owner@ultravet.ua" />
+        <Input
+          id="profile-email"
+          name="email"
+          type="email"
+          defaultValue={profile.email ?? ""}
+          placeholder="owner@ultravet.ua"
+          className="h-10"
+        />
+        <p className="text-xs text-muted-foreground">На цю адресу можна надсилати документи та службові повідомлення.</p>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="profile-address">Адреса</Label>
-        <Input id="profile-address" name="address" defaultValue={profile.address ?? ""} placeholder="Місто, вулиця, будинок" />
+        <Input
+          id="profile-address"
+          name="address"
+          defaultValue={profile.address ?? ""}
+          placeholder="Місто, вулиця, будинок"
+          className="h-10"
+        />
+        <p className="text-xs text-muted-foreground">Необов&apos;язково, але корисно для повної картки клієнта.</p>
       </div>
 
-      <div className="flex flex-col gap-2 md:col-span-2">
+      <div className="flex flex-col gap-1.5 md:col-span-2">
         <Label htmlFor="profile-notes">Додаткова нотатка</Label>
         <Textarea
           id="profile-notes"
           name="notes"
           defaultValue={profile.notes ?? ""}
           placeholder="Зручний номер для зв'язку, коментар для клініки, уточнення по адресі"
+          className="min-h-24"
         />
+        <p className="text-xs text-muted-foreground">Можна вказати зручний спосіб зв&apos;язку або інші організаційні уточнення.</p>
       </div>
 
       <ActionFeedback
@@ -71,7 +96,7 @@ export function CabinetProfileForm({ action, profile }: CabinetProfileFormProps)
       />
 
       <div className="md:col-span-2">
-        <Button type="submit" disabled={isPending}>
+        <Button type="submit" disabled={isPending} className="h-10 rounded-full px-5">
           Зберегти зміни
         </Button>
       </div>

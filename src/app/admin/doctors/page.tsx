@@ -1,5 +1,12 @@
-import { createDoctorAction, deleteDoctorAction, updateDoctorAction } from "@/server/actions/admin";
-import { Button } from "@/components/ui/button";
+import {
+  deactivateDoctorScheduleFormAction,
+  deleteDoctorFormAction,
+  upsertDoctorScheduleFormAction,
+} from "@/server/actions/admin";
+import { DoctorScheduleManager } from "@/components/forms/doctor-schedule-manager";
+import { AdminDoctorCreateForm } from "@/components/forms/admin-doctor-create-form";
+import { AdminDoctorUpdateForm } from "@/components/forms/admin-doctor-update-form";
+import { ActionButtonForm } from "@/components/forms/action-button-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAdminAccess } from "@/lib/auth/access";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +16,12 @@ export default async function AdminDoctorsPage() {
 
   const doctors = await prisma.doctor.findMany({
     orderBy: { fullName: "asc" },
-    include: { user: true },
+    include: {
+      user: true,
+      schedules: {
+        orderBy: { weekday: "asc" },
+      },
+    },
   });
 
   return (
@@ -19,18 +31,7 @@ export default async function AdminDoctorsPage() {
           <CardTitle>Додати лікаря</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={createDoctorAction} className="grid gap-4">
-            <input name="fullName" placeholder="ПІБ" className="h-10 rounded-lg border border-input px-3" />
-            <input name="email" placeholder="Email" className="h-10 rounded-lg border border-input px-3" />
-            <input name="password" placeholder="Тимчасовий пароль" className="h-10 rounded-lg border border-input px-3" />
-            <input name="specialization" placeholder="Спеціалізація" className="h-10 rounded-lg border border-input px-3" />
-            <textarea name="bio" placeholder="Коротке біо" className="min-h-24 rounded-lg border border-input px-3 py-2" />
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="isActive" defaultChecked />
-              Активний лікар
-            </label>
-            <Button type="submit">Створити лікаря</Button>
-          </form>
+          <AdminDoctorCreateForm />
         </CardContent>
       </Card>
       <Card>
@@ -46,29 +47,56 @@ export default async function AdminDoctorsPage() {
                   <p className="text-sm text-muted-foreground">{doctor.specialization}</p>
                   <p className="text-sm text-muted-foreground">{doctor.isActive ? "Активний" : "Неактивний"}</p>
                 </div>
-                <form action={deleteDoctorAction}>
-                  <input type="hidden" name="doctorId" value={doctor.id} />
-                  <input type="hidden" name="userId" value={doctor.userId} />
-                  <Button type="submit" variant="outline" size="sm">
-                    Видалити
-                  </Button>
-                </form>
+                <ActionButtonForm
+                  action={deleteDoctorFormAction}
+                  fields={[
+                    { name: "doctorId", value: doctor.id },
+                    { name: "userId", value: doctor.userId },
+                  ]}
+                  submitLabel="Архівувати"
+                  pendingLabel="Архівую…"
+                  variant="outline"
+                  size="sm"
+                  successTitle="Лікаря архівовано"
+                  errorTitle="Не вдалося архівувати лікаря"
+                />
               </div>
               <details className="mt-4 rounded-xl border border-dashed border-border p-4">
-                <summary className="cursor-pointer text-sm font-medium">Редагувати</summary>
-                <form action={updateDoctorAction} className="mt-4 grid gap-3">
-                  <input type="hidden" name="doctorId" value={doctor.id} />
-                  <input type="hidden" name="userId" value={doctor.userId} />
-                  <input name="fullName" defaultValue={doctor.fullName} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="email" defaultValue={doctor.user.email ?? ""} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="specialization" defaultValue={doctor.specialization} className="h-10 rounded-lg border border-input px-3" />
-                  <textarea name="bio" defaultValue={doctor.bio ?? ""} className="min-h-24 rounded-lg border border-input px-3 py-2" />
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="isActive" defaultChecked={doctor.isActive} />
-                    Активний лікар
-                  </label>
-                  <Button type="submit">Зберегти зміни</Button>
-                </form>
+                <summary className="cursor-pointer text-sm font-medium">Редагувати профіль</summary>
+                <AdminDoctorUpdateForm
+                  doctor={{
+                    id: doctor.id,
+                    userId: doctor.userId,
+                    fullName: doctor.fullName,
+                    email: doctor.user.email ?? "",
+                    specialization: doctor.specialization,
+                    bio: doctor.bio ?? "",
+                    isActive: doctor.isActive,
+                  }}
+                />
+              </details>
+              <details className="mt-4 rounded-xl border border-dashed border-border p-4">
+                <summary className="cursor-pointer text-sm font-medium">Тижневий графік</summary>
+                <div className="mt-4">
+                  <DoctorScheduleManager
+                    doctorId={doctor.id}
+                    canEditDoctorId
+                    schedules={doctor.schedules.map((schedule) => ({
+                      id: schedule.id,
+                      weekday: schedule.weekday,
+                      startTime: schedule.startTime,
+                      endTime: schedule.endTime,
+                      slotDurationMinutes: schedule.slotDurationMinutes,
+                      breakStart: schedule.breakStart,
+                      breakEnd: schedule.breakEnd,
+                      isActive: schedule.isActive,
+                    }))}
+                    saveAction={upsertDoctorScheduleFormAction}
+                    disableAction={deactivateDoctorScheduleFormAction}
+                    title={`Графік ${doctor.fullName}`}
+                    description="Саме цей тижневий шаблон використовується для календаря, онлайн-запису і вільних слотів."
+                  />
+                </div>
               </details>
             </div>
           ))}

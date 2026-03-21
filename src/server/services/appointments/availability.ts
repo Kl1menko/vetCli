@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { blockingAppointmentStatuses } from "@/lib/appointments";
 
 type SlotRequest = {
   serviceDurationMinutes: number;
@@ -108,6 +109,9 @@ export async function getAvailableBookingSlots({
       where: {
         doctorId,
         date: selectedDate,
+        status: {
+          in: blockingAppointmentStatuses,
+        },
       },
       select: {
         startTime: true,

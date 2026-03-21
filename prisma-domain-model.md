@@ -4,6 +4,12 @@
 
 Фактична реалізація вже існує в [prisma/schema.prisma](/Users/maxberry/Dev/vet/prisma/schema.prisma). Цей документ нормалізує її як domain model, описує зв’язки та інваріанти і фіксує рекомендовані уточнення.
 
+Правило пріоритету:
+
+- `product-spec.md` є джерелом істини для product scope, ACL, lifecycle rules і меж MVP;
+- `prisma-domain-model.md` синхронізує ці правила з доменною моделлю і schema;
+- якщо schema тимчасово відстає від spec, цей документ фіксує цільову доменну модель, а не випадкову поведінку поточної реалізації.
+
 ## 2. Bounded contexts
 
 ### Identity & Access
@@ -61,6 +67,7 @@
 - `phone` унікальний, якщо заданий;
 - persisted roles: `CLIENT | ADMIN | DOCTOR | SUPERADMIN`;
 - прикладна роль `guest` не зберігається в БД.
+- `UserStatus.INVITED` може існувати технічно в schema, але invite/reset flow не є обов’язковою частиною MVP product scope.
 
 ### Owner aggregate
 
@@ -110,6 +117,8 @@
 - тварина належить одному `OwnerProfile`;
 - клієнт не може редагувати медичні записи тварини;
 - `microchipNumber` унікальний, якщо заданий.
+- клієнт має read-only доступ до `Vaccination` своєї тварини;
+- `Vaccination` у MVP не є окремим admin CRUD-модулем, а частиною медичної історії пацієнта.
 
 ### Booking aggregate
 
@@ -129,6 +138,9 @@
 - слот має бути валідним відносно графіка, блоків і існуючих записів;
 - запис не може створюватись у минулому;
 - один `Appointment` має не більше одного `Visit`.
+- booking-обчислення повинні бути timezone-aware; дефолтна timezone клініки для MVP: `Europe/Kyiv`;
+- для online booking діє мінімальний lead time: `2 години` до початку слота;
+- один `Appointment` відповідає одній послузі і одному часовому слоту.
 
 ### Medical aggregate
 
@@ -151,6 +163,20 @@
 - `Visit.petId` і `Appointment.petId` мають логічно збігатися;
 - `Visit.doctorId` і `Appointment.doctorId` мають логічно збігатися;
 - лише лікар клініки має write-access до медичних даних.
+- завершення `Visit` є єдиною нормативною підставою переведення пов’язаного `Appointment` у `COMPLETED`.
+
+### File access aggregate notes
+
+`FileAsset`, `LabResult` attachment і invoice files не є самостійним бізнес-модулем.
+
+Інваріанти:
+
+- файл повинен бути прив’язаний до конкретної доменної сутності;
+- клієнт має лише read-only доступ до файлів своїх тварин і рахунків;
+- адміністратор має read-only доступ до медичних файлів;
+- клієнтські uploads не входять у MVP;
+- допустимі формати для MVP: `PDF | JPG | PNG | WEBP`;
+- максимальний розмір одного файлу в MVP: `10 MB`.
 
 ## 4. Enums
 
@@ -374,11 +400,16 @@
 Призначення:
 - деталізація медичного та фінансового контуру.
 
+Уточнення для MVP:
+- `Vaccination` ведеться лікарем у картці пацієнта;
+- `Invoice` може створюватись лікарем у межах `Visit`, а адміністратор працює з фінансовим статусом і переглядом;
+- `FileAsset` та пов’язані файли не створюються клієнтом напряму.
+
 ## 6. Статусні переходи
 
 ### Appointment lifecycle
 
-Рекомендована допустима модель:
+Нормативна допустима модель, синхронізована з `product-spec.md`:
 
 - `NEW -> PENDING`
 - `PENDING -> CONFIRMED`
@@ -392,14 +423,32 @@
 - `RESCHEDULED -> CANCELLED_BY_ADMIN`
 
 Примітка:
-- зараз переходи фактично розпорошені по actions, а не формалізовані в одному місці.
+- запис, створений клієнтом через online booking, за замовчуванням має стартувати як `PENDING`;
+- запис, створений адміністратором вручну, може стартувати як `CONFIRMED`;
+- `COMPLETED` не повинен виставлятись окремою довільною адмінською дією без завершення `Visit`;
+- після `CANCELLED_BY_CLIENT`, `CANCELLED_BY_ADMIN`, `COMPLETED` або `NO_SHOW` запис є термінальним.
 
 ### Visit lifecycle
 
 - `DRAFT -> IN_PROGRESS`
 - `IN_PROGRESS -> COMPLETED`
 
-## 7. Ключові індекси та обмеження
+Примітка:
+
+- `Visit` створюється лікарем на основі конкретного `Appointment`;
+- `Visit` не є самостійною сутністю “поза прийомом”.
+
+## 7. ACL-наслідки для моделі
+
+Це не замінює application-level ACL, але фіксує очікувані доменні обмеження.
+
+- `Client` має write-access лише до власного `OwnerProfile`, власних `Pet` і власних `Appointment`.
+- `Client` має read-only доступ до власних `Visit`, `Diagnosis`, `Prescription`, `LabResult`, `Vaccination`, `Invoice`, `FileAsset`.
+- `Doctor` має write-access до `Visit`, `Diagnosis`, `Prescription`, `LabResult`, `Vaccination`, `Invoice`, `FileAsset` лише в межах своїх прийомів.
+- `Admin` має full operational access до directory/booking сутностей, але read-only до медичного змісту `Visit`.
+- `Superadmin` розширює `Admin`, але не скасовує доменні інваріанти медичного контуру.
+
+## 8. Ключові індекси та обмеження
 
 У schema вже є:
 
@@ -413,7 +462,7 @@
 - `Invoice.visitId @unique`
 - індекси на `Appointment(date, doctorId)` та `Appointment(ownerId, date)`
 
-## 8. Рекомендовані уточнення моделі
+## 9. Рекомендовані уточнення моделі
 
 ### 1. Формалізувати weekday
 
@@ -458,13 +507,13 @@
 
 Зараз це дотримується кодом, але не виражене окремим механізмом консистентності.
 
-## 9. Цільова позиція
+## 10. Цільова позиція
 
 Поточна schema вже є життєздатною для MVP. Її не треба переписувати з нуля.
 
 Правильна стратегія:
 
 1. використати наявну schema як baseline;
-2. формалізувати enums і transition rules;
+2. тримати її синхронізованою з `product-spec.md` по lifecycle, ACL і межах MVP;
 3. добудовувати відсутні use cases поверх цієї моделі;
 4. only then робити structural migration типу `startAt/endAt`, якщо вона реально потрібна.

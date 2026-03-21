@@ -88,19 +88,19 @@ export function PublicHero({ isAuthenticated = false, role = null }: PublicHeroP
         </div>
 
         <div className="hidden w-full gap-2 rounded-[1.35rem] p-0 md:grid md:grid-cols-3 md:gap-3 md:p-0">
-          <div className="flex min-w-0 w-full items-center gap-2 rounded-[1rem] bg-white/92 px-3 py-2 text-[11px] font-semibold tracking-[-0.01em] text-slate-600 sm:min-h-[3.4rem] sm:gap-2.5 sm:px-4 sm:text-[12px]">
+          <div className="flex min-w-0 w-full items-center justify-center gap-2 rounded-[1rem] bg-white/92 px-3 py-2 text-center text-[11px] font-semibold tracking-[-0.01em] text-slate-600 sm:min-h-[3.4rem] sm:gap-2.5 sm:px-4 sm:text-[12px]">
             <span className="flex size-7 shrink-0 items-center justify-center text-[#1f57f2] sm:size-8">
               <Clock3 className="size-[1.15rem]" />
             </span>
             <span className="truncate">{clinicProfile.hours}</span>
           </div>
-          <div className="flex min-w-0 w-full items-center gap-2 rounded-[1rem] bg-white/92 px-3 py-2 text-[11px] font-semibold tracking-[-0.01em] text-slate-600 sm:min-h-[3.4rem] sm:gap-2.5 sm:px-4 sm:text-[12px]">
+          <div className="flex min-w-0 w-full items-center justify-center gap-2 rounded-[1rem] bg-white/92 px-3 py-2 text-center text-[11px] font-semibold tracking-[-0.01em] text-slate-600 sm:min-h-[3.4rem] sm:gap-2.5 sm:px-4 sm:text-[12px]">
             <span className="flex size-7 shrink-0 items-center justify-center text-[#1f57f2] sm:size-8">
               <Phone className="size-[1.15rem]" />
             </span>
             <ClinicPhoneLink className="truncate">{clinicProfile.phone}</ClinicPhoneLink>
           </div>
-          <div className="flex min-w-0 w-full items-center gap-2 rounded-[1rem] bg-white/92 px-3 py-2 text-[11px] font-semibold tracking-[-0.01em] text-slate-600 sm:min-h-[3.4rem] sm:gap-2.5 sm:px-4 sm:text-[12px]">
+          <div className="flex min-w-0 w-full items-center justify-center gap-2 rounded-[1rem] bg-white/92 px-3 py-2 text-center text-[11px] font-semibold tracking-[-0.01em] text-slate-600 sm:min-h-[3.4rem] sm:gap-2.5 sm:px-4 sm:text-[12px]">
             <span className="flex size-7 shrink-0 items-center justify-center text-[#1f57f2] sm:size-8">
               <MapPin className="size-[1.15rem]" />
             </span>
@@ -162,7 +162,7 @@ export function PublicHero({ isAuthenticated = false, role = null }: PublicHeroP
             <div className="grid min-h-[12.5rem] rounded-[2rem] bg-[#f2f2f0] p-5 md:min-h-[15rem] md:p-7">
               <div className="mt-auto flex flex-col gap-3 text-center sm:gap-4 sm:text-left">
                 <div className="max-w-full text-[clamp(4rem,21vw,10.5rem)] font-semibold leading-[0.84] tracking-[-0.07em] text-[#0f2a4f] sm:origin-left sm:scale-x-[1.08]">
-                  Ultra<span className="text-[#1f57f2]">vet</span>
+                  Ultra<span className="text-[#1f57f2]">Vet</span>
                 </div>
                 <p className="mx-auto max-w-lg text-sm leading-6 text-slate-600 sm:mx-0 sm:text-base sm:leading-7">
                   Сучасна ветклініка у Львові з онлайн-записом, кабінетом власника тварини та зрозумілою історією кожного звернення.
@@ -288,7 +288,7 @@ export function PublicHero({ isAuthenticated = false, role = null }: PublicHeroP
                       className="h-11 w-auto object-contain"
                     />
                     <span className="text-[2rem] font-semibold tracking-[-0.06em] text-[#0f2a4f]">
-                      Ultra<span className="text-[#1f57f2]">vet</span>
+                      Ultra<span className="text-[#1f57f2]">Vet</span>
                     </span>
                   </Link>
 

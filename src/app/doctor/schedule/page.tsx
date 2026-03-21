@@ -1,6 +1,12 @@
 import Link from "next/link";
 
-import { createVisitFromAppointmentAction } from "@/server/actions/doctor";
+import {
+  createVisitFromAppointmentFormAction,
+  deactivateOwnDoctorScheduleFormAction,
+  upsertOwnDoctorScheduleFormAction,
+} from "@/server/actions/doctor";
+import { ActionButtonForm } from "@/components/forms/action-button-form";
+import { DoctorScheduleManager } from "@/components/forms/doctor-schedule-manager";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -28,6 +34,10 @@ function buildTimelineScale(startTime: string, endTime: string, stepMinutes: num
   }
 
   return items;
+}
+
+function clampPercent(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 export default async function DoctorSchedulePage({
@@ -74,6 +84,14 @@ export default async function DoctorSchedulePage({
         }),
       ])
     : [[], null, []];
+  const weeklySchedules = doctor
+    ? await prisma.doctorSchedule.findMany({
+        where: {
+          doctorId: doctor.id,
+        },
+        orderBy: { weekday: "asc" },
+      })
+    : [];
 
   const stepMinutes = schedule?.slotDurationMinutes ?? 30;
   const timelineStart = schedule?.startTime ?? "09:00";
@@ -88,11 +106,13 @@ export default async function DoctorSchedulePage({
     const end = toMinutes(appointment.endTime);
     const top = ((start - timelineStartMinutes) / timelineDuration) * 100;
     const height = (Math.max(end - start, stepMinutes) / timelineDuration) * 100;
+    const durationMinutes = Math.max(end - start, stepMinutes);
 
     return {
       ...appointment,
       top,
       height,
+      durationMinutes,
     };
   });
 
@@ -115,15 +135,39 @@ export default async function DoctorSchedulePage({
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-              Розклад на день з прийомами, паузами і швидким стартом візиту.
+              Розклад на день.
             </h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              Це головний екран для роботи протягом дня: тут видно навантаження, пацієнтів і доступ до візиту прямо зі слота.
+              Прийоми, паузи і швидкий перехід до візиту.
             </p>
           </div>
           <Link href="/doctor/appointments" className={cn(buttonVariants({ variant: "outline" }), "rounded-full px-5")}>
             Список прийомів
           </Link>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)]">
+        <CardHeader>
+          <CardTitle>Мій тижневий графік</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DoctorScheduleManager
+            schedules={weeklySchedules.map((schedule) => ({
+              id: schedule.id,
+              weekday: schedule.weekday,
+              startTime: schedule.startTime,
+              endTime: schedule.endTime,
+              slotDurationMinutes: schedule.slotDurationMinutes,
+              breakStart: schedule.breakStart,
+              breakEnd: schedule.breakEnd,
+              isActive: schedule.isActive,
+            }))}
+            saveAction={upsertOwnDoctorScheduleFormAction}
+            disableAction={deactivateOwnDoctorScheduleFormAction}
+            title="Базовий шаблон по днях тижня"
+            description="Регулярний графік формує доступні слоти."
+          />
         </CardContent>
       </Card>
 
@@ -172,22 +216,22 @@ export default async function DoctorSchedulePage({
 
           <div className="rounded-[2rem] border border-border/70 bg-background p-4">
             {schedule ? (
-              <div className="grid grid-cols-[72px_1fr] gap-4">
-                <div className="relative">
+              <div className="grid grid-cols-[76px_1fr] gap-4">
+                <div className="relative rounded-[1.5rem] border border-border/60 bg-slate-50/70 px-1 py-1">
                   {timelineScale.map((time, index) => (
                     <div
                       key={time}
-                      className="flex items-start justify-end pr-2 text-xs text-muted-foreground"
+                      className="flex items-start justify-end pr-3 text-[11px] font-medium text-slate-500"
                       style={{
                         height: index === timelineScale.length - 1 ? 0 : 56,
                       }}
                     >
-                      <span className="-translate-y-2 bg-background px-1">{time}</span>
+                      <span className="-translate-y-2 rounded-full bg-white px-2 py-0.5 shadow-sm">{time}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="relative min-h-[calc(56px_*_16)] overflow-hidden rounded-[1.75rem] border border-border/70 bg-[linear-gradient(180deg,rgba(248,252,252,0.96)_0%,rgba(255,255,255,1)_100%)]">
+                <div className="relative min-h-[calc(56px_*_16)] overflow-hidden rounded-[1.75rem] border border-border/70 bg-[linear-gradient(180deg,rgba(248,252,252,0.98)_0%,rgba(255,255,255,1)_100%)] px-2 py-1">
                   {timelineScale.slice(0, -1).map((time) => (
                     <div
                       key={time}
@@ -201,75 +245,124 @@ export default async function DoctorSchedulePage({
                   {blockTimelineItems.map((block) => (
                     <div
                       key={block.id}
-                      className="absolute left-3 right-3 rounded-2xl border border-amber-200 bg-amber-100/90 px-4 py-3 shadow-sm"
+                      className="absolute left-3 right-3 rounded-[1.35rem] border border-amber-200/90 bg-[linear-gradient(180deg,rgba(254,243,199,0.92)_0%,rgba(255,251,235,0.98)_100%)] px-4 py-3 shadow-[0_18px_32px_-28px_rgba(120,53,15,0.45)]"
                       style={{
-                        top: `${block.top}%`,
-                        height: `${Math.max(block.height, 10)}%`,
-                      }}
-                    >
-                      <p className="text-sm font-semibold text-amber-950">
-                        {block.startTime}–{block.endTime}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-xs text-amber-900/80">
-                        {block.reason ?? "Блок часу в календарі"}
-                      </p>
-                    </div>
-                  ))}
-
-                  {appointmentTimelineItems.map((appointment) => (
-                    <div
-                      key={appointment.id}
-                      className={cn(
-                        "absolute left-5 right-5 rounded-2xl border px-4 py-3 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)]",
-                        appointment.status === "CONFIRMED" && "border-emerald-200 bg-emerald-50/96",
-                        appointment.status === "PENDING" && "border-amber-200 bg-amber-50/96",
-                        appointment.status === "COMPLETED" && "border-sky-200 bg-sky-50/96",
-                        appointment.status.includes("CANCELLED") && "border-rose-200 bg-rose-50/96",
-                        !["CONFIRMED", "PENDING", "COMPLETED"].includes(appointment.status) &&
-                          !appointment.status.includes("CANCELLED") &&
-                          "border-slate-200 bg-white/96",
-                      )}
-                      style={{
-                        top: `${appointment.top}%`,
-                        height: `${Math.max(appointment.height, 10)}%`,
+                        top: `${clampPercent(block.top, 0, 94)}%`,
+                        minHeight: "54px",
+                        height: `${Math.max(block.height, 8)}%`,
                       }}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-950">
-                            {appointment.startTime}–{appointment.endTime}
+                          <p className="text-sm font-semibold text-amber-950">
+                            {block.startTime}–{block.endTime}
                           </p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
-                            {appointment.pet.name} · {appointment.service.name}
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-amber-900/80">
+                            {block.reason ?? "Блок часу в календарі"}
                           </p>
-                          <p className="mt-1 text-xs text-slate-600">{appointment.owner.fullName}</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Link
-                              href={`/doctor/patients/${appointment.pet.id}`}
-                              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                            >
-                              Пацієнт
-                            </Link>
-                            {appointment.visit ? (
-                              <Link
-                                href={`/doctor/visits/${appointment.visit.id}`}
-                                className={cn(buttonVariants({ size: "sm" }))}
-                              >
-                                Візит
-                              </Link>
-                            ) : (
-                              <form action={createVisitFromAppointmentAction}>
-                                <input type="hidden" name="appointmentId" value={appointment.id} />
-                                <button className={cn(buttonVariants({ size: "sm" }))} type="submit">
-                                  Створити візит
-                                </button>
-                              </form>
-                            )}
-                          </div>
                         </div>
-                        <StatusBadge status={appointment.status} />
+                        <span className="rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-medium text-amber-900">
+                          Блок
+                        </span>
                       </div>
                     </div>
+                  ))}
+
+                  {appointmentTimelineItems.map((appointment) => (
+                    (() => {
+                      const isCompact = appointment.durationMinutes <= 45;
+                      const isCancelled = appointment.status.includes("CANCELLED");
+                      const canCreateVisit = ["CONFIRMED", "RESCHEDULED"].includes(appointment.status) && !appointment.visit;
+
+                      return (
+                        <div
+                          key={appointment.id}
+                          className={cn(
+                            "absolute left-3 right-3 overflow-hidden rounded-[1.5rem] border shadow-[0_20px_42px_-32px_rgba(15,23,42,0.45)] backdrop-blur-[1px]",
+                            appointment.status === "CONFIRMED" &&
+                              "border-emerald-200/90 bg-[linear-gradient(180deg,rgba(220,252,231,0.72)_0%,rgba(240,253,244,0.96)_100%)]",
+                            appointment.status === "PENDING" &&
+                              "border-amber-200/90 bg-[linear-gradient(180deg,rgba(254,249,195,0.78)_0%,rgba(255,251,235,0.97)_100%)]",
+                            appointment.status === "COMPLETED" &&
+                              "border-sky-200/90 bg-[linear-gradient(180deg,rgba(219,234,254,0.78)_0%,rgba(239,246,255,0.98)_100%)]",
+                            appointment.status.includes("CANCELLED") &&
+                              "border-rose-200/90 bg-[linear-gradient(180deg,rgba(255,228,230,0.78)_0%,rgba(255,241,242,0.98)_100%)]",
+                            !["CONFIRMED", "PENDING", "COMPLETED"].includes(appointment.status) &&
+                              !appointment.status.includes("CANCELLED") &&
+                              "border-slate-200/90 bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(255,255,255,0.98)_100%)]",
+                          )}
+                          style={{
+                            top: `${clampPercent(appointment.top, 0, 95)}%`,
+                            minHeight: isCompact ? "72px" : "116px",
+                            height: `${Math.max(appointment.height, isCompact ? 8 : 12)}%`,
+                          }}
+                        >
+                          <div
+                            className={cn(
+                              "flex h-full flex-col gap-3 px-4 py-3",
+                              isCompact ? "sm:flex-row sm:items-center sm:justify-between sm:gap-4" : "",
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-start gap-2">
+                                <p className="text-sm font-semibold tracking-[-0.02em] text-slate-950">
+                                  {appointment.startTime}–{appointment.endTime}
+                                </p>
+                                {isCompact ? <StatusBadge status={appointment.status} /> : null}
+                              </div>
+                              <p className="mt-1 truncate text-sm font-medium text-slate-900">
+                                {appointment.pet.name} · {appointment.service.name}
+                              </p>
+                              <p className="mt-1 truncate text-xs text-slate-600">{appointment.owner.fullName}</p>
+                            </div>
+
+                            <div className={cn("flex flex-col gap-3", isCompact ? "sm:items-end" : "")}>
+                              {!isCompact ? (
+                                <div className="flex items-start justify-end">
+                                  <StatusBadge status={appointment.status} />
+                                </div>
+                              ) : null}
+
+                              <div className="flex flex-wrap gap-2">
+                                <Link
+                                  href={`/doctor/patients/${appointment.pet.id}`}
+                                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "bg-white/80")}
+                                >
+                                  Пацієнт
+                                </Link>
+                                {appointment.visit ? (
+                                  <Link
+                                    href={`/doctor/visits/${appointment.visit.id}`}
+                                    className={cn(buttonVariants({ size: "sm" }), "shadow-none")}
+                                  >
+                                    Відкрити візит
+                                  </Link>
+                                ) : canCreateVisit ? (
+                                  <ActionButtonForm
+                                    action={createVisitFromAppointmentFormAction}
+                                    fields={[{ name: "appointmentId", value: appointment.id }]}
+                                    submitLabel="Створити візит"
+                                    pendingLabel="Створюю…"
+                                    size="sm"
+                                    buttonClassName={cn(buttonVariants({ size: "sm" }), "shadow-none")}
+                                    successTitle="Візит створено"
+                                    errorTitle="Не вдалося створити візит"
+                                  />
+                                ) : (
+                                  <span className="inline-flex h-7 items-center rounded-full border border-white/70 bg-white/55 px-3 text-[11px] font-medium text-slate-500">
+                                    {isCancelled
+                                      ? "Скасований запис"
+                                      : appointment.status === "COMPLETED"
+                                        ? "Прийом завершено"
+                                        : "Чекає підтвердження"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
                   ))}
                 </div>
               </div>

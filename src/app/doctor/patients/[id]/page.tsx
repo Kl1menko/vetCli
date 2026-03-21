@@ -27,6 +27,7 @@ export default async function DoctorPatientPage({
   const pet = await prisma.pet.findFirst({
     where: {
       id,
+      isArchived: false,
       OR: [
         {
           appointments: {

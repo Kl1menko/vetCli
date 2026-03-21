@@ -5,9 +5,27 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import {
+  assertAppointmentStatusTransition,
+  blockingAppointmentStatuses,
+  isTerminalAppointmentStatus,
+} from "@/lib/appointments";
 import { hashPassword } from "@/lib/auth/password";
+import { assertPetIsActive, buildPetArchivePayload } from "@/lib/pets";
 import { canAccessAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import {
+  assertDoctorScheduleWindow,
+  doctorScheduleFormSchema,
+  getDoctorScheduleFieldErrorMessage,
+  normalizeDoctorSchedulePayload,
+} from "@/lib/schedules";
+import { assertAppointmentAvailability } from "@/server/services/appointments/validation";
+
+export type AdminActionState = {
+  error?: string;
+  success?: string;
+};
 
 const clientSchema = z.object({
   fullName: z.string().min(2),
@@ -114,10 +132,6 @@ function toMinutes(time: string) {
   return hours * 60 + minutes;
 }
 
-function formatTime(totalMinutes: number) {
-  return `${String(Math.floor(totalMinutes / 60)).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
-}
-
 function getFieldErrorMessage(result: z.ZodSafeParseError<unknown>) {
   const issue = result.error.issues[0];
 
@@ -138,144 +152,75 @@ function getFieldErrorMessage(result: z.ZodSafeParseError<unknown>) {
   }
 
   if (issue.path[0] === "fullName") {
-    return "Вкажіть ім'я та прізвище клієнта.";
+    return "Вкажіть ім'я та прізвище.";
+  }
+
+  if (issue.path[0] === "specialization") {
+    return "Вкажіть спеціалізацію лікаря.";
+  }
+
+  if (issue.path[0] === "name") {
+    return "Вкажіть назву.";
+  }
+
+  if (issue.path[0] === "slug") {
+    return "Вкажіть системну назву для URL.";
+  }
+
+  if (issue.path[0] === "category") {
+    return "Вкажіть категорію послуги.";
+  }
+
+  if (issue.path[0] === "durationMinutes") {
+    return "Вкажіть коректну тривалість послуги в хвилинах.";
+  }
+
+  if (issue.path[0] === "price") {
+    return "Вкажіть коректну вартість послуги.";
+  }
+
+  if (issue.path[0] === "description") {
+    return "Опис послуги має містити щонайменше 10 символів.";
+  }
+
+  if (issue.path[0] === "ownerId") {
+    return "Оберіть клієнта для запису.";
+  }
+
+  if (issue.path[0] === "petId") {
+    return "Оберіть тварину для запису.";
+  }
+
+  if (issue.path[0] === "doctorId") {
+    return "Оберіть лікаря.";
+  }
+
+  if (issue.path[0] === "serviceId") {
+    return "Оберіть послугу.";
+  }
+
+  if (issue.path[0] === "date") {
+    return "Оберіть дату запису.";
+  }
+
+  if (issue.path[0] === "startTime") {
+    return "Оберіть час запису.";
   }
 
   return "Перевірте, будь ласка, заповнені поля.";
 }
 
-async function resolveAppointmentTiming(payload: {
-  serviceId: string;
-  date: string;
-  startTime: string;
-}) {
-  const service = await prisma.service.findUnique({
-    where: { id: payload.serviceId },
-    select: { durationMinutes: true },
+async function assertPetBelongsToOwner(ownerId: string, petId: string) {
+  const pet = await prisma.pet.findFirst({
+    where: {
+      id: petId,
+      ownerId,
+      isArchived: false,
+    },
+    select: { id: true, isArchived: true },
   });
 
-  if (!service) {
-    throw new Error("Послугу не знайдено.");
-  }
-
-  const [hours, minutes] = payload.startTime.split(":").map(Number);
-  const date = toDayStart(payload.date);
-
-  const startMinutes = hours * 60 + minutes;
-  const endMinutes = startMinutes + service.durationMinutes;
-  const endTime = formatTime(endMinutes);
-
-  return { date, endTime };
-}
-
-async function assertAppointmentAvailability(payload: {
-  doctorId: string;
-  serviceId: string;
-  date: string;
-  startTime: string;
-  appointmentId?: string;
-}) {
-  const { date, endTime } = await resolveAppointmentTiming(payload);
-  const weekday = date.getDay() || 7;
-
-  const [service, schedule, blocks, appointments] = await Promise.all([
-    prisma.service.findUnique({
-      where: { id: payload.serviceId },
-      select: { durationMinutes: true, name: true },
-    }),
-    prisma.doctorSchedule.findFirst({
-      where: { doctorId: payload.doctorId, weekday, isActive: true },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-        breakStart: true,
-        breakEnd: true,
-      },
-    }),
-    prisma.scheduleBlock.findMany({
-      where: {
-        doctorId: payload.doctorId,
-        date,
-      },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-        reason: true,
-      },
-    }),
-    prisma.appointment.findMany({
-      where: {
-        doctorId: payload.doctorId,
-        date,
-        ...(payload.appointmentId
-          ? {
-              id: {
-                not: payload.appointmentId,
-              },
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        startTime: true,
-        endTime: true,
-      },
-    }),
-  ]);
-
-  if (!service) {
-    throw new Error("Послугу не знайдено.");
-  }
-
-  if (!schedule) {
-    throw new Error("Для цього лікаря на обрану дату немає активного графіка.");
-  }
-
-  const startMinutes = toMinutes(payload.startTime);
-  const endMinutes = toMinutes(endTime);
-  const workingStart = toMinutes(schedule.startTime);
-  const workingEnd = toMinutes(schedule.endTime);
-
-  if (startMinutes < workingStart || endMinutes > workingEnd) {
-    throw new Error("Час прийому виходить за межі графіка лікаря.");
-  }
-
-  if (schedule.breakStart && schedule.breakEnd) {
-    const breakStart = toMinutes(schedule.breakStart);
-    const breakEnd = toMinutes(schedule.breakEnd);
-
-    if (startMinutes < breakEnd && endMinutes > breakStart) {
-      throw new Error("Обраний час перетинається з перервою лікаря.");
-    }
-  }
-
-  const overlapsBlock = blocks.find((block) => {
-    const blockStart = toMinutes(block.startTime);
-    const blockEnd = toMinutes(block.endTime);
-    return startMinutes < blockEnd && endMinutes > blockStart;
-  });
-
-  if (overlapsBlock) {
-    throw new Error(overlapsBlock.reason ? `Слот заблокований: ${overlapsBlock.reason}` : "Слот заблокований адміністратором.");
-  }
-
-  const overlapsAppointment = appointments.find((appointment) => {
-    const appointmentStart = toMinutes(appointment.startTime);
-    const appointmentEnd = toMinutes(appointment.endTime);
-    return startMinutes < appointmentEnd && endMinutes > appointmentStart;
-  });
-
-  if (overlapsAppointment) {
-    throw new Error("На цей час уже існує інший запис.");
-  }
-
-  return {
-    date,
-    endTime,
-    service,
-  };
+  assertPetIsActive(pet, "Обрана тварина не належить вибраному клієнту.");
 }
 
 async function assertScheduleBlockAvailability(payload: {
@@ -303,6 +248,9 @@ async function assertScheduleBlockAvailability(payload: {
       where: {
         doctorId: payload.doctorId,
         date,
+        status: {
+          in: blockingAppointmentStatuses,
+        },
       },
       select: { id: true, startTime: true, endTime: true },
     }),
@@ -400,6 +348,18 @@ export async function createClientAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function createClientFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await createClientAction(formData);
+    return { success: "Клієнта створено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося створити клієнта." };
+  }
+}
+
 export async function createPetAction(formData: FormData) {
   await requireAdminActionAccess();
 
@@ -417,6 +377,18 @@ export async function createPetAction(formData: FormData) {
   });
 
   revalidateAdminData();
+}
+
+export async function createPetFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await createPetAction(formData);
+    return { success: "Тварину додано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося додати тварину." };
+  }
 }
 
 export async function createDoctorAction(formData: FormData) {
@@ -461,10 +433,22 @@ export async function createDoctorAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function createDoctorFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await createDoctorAction(formData);
+    return { success: "Лікаря створено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося створити лікаря." };
+  }
+}
+
 export async function createServiceAction(formData: FormData) {
   await requireAdminActionAccess();
 
-  const payload = serviceSchema.parse({
+  const result = serviceSchema.safeParse({
     name: formData.get("name"),
     slug: formData.get("slug"),
     description: formData.get("description"),
@@ -474,6 +458,12 @@ export async function createServiceAction(formData: FormData) {
     isActive: formData.get("isActive") === "on",
     isOnlineBookable: formData.get("isOnlineBookable") === "on",
   });
+
+  if (!result.success) {
+    throw new Error(getFieldErrorMessage(result));
+  }
+
+  const payload = result.data;
 
   await prisma.service.create({
     data: {
@@ -487,10 +477,22 @@ export async function createServiceAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function createServiceFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await createServiceAction(formData);
+    return { success: "Послугу створено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося створити послугу." };
+  }
+}
+
 export async function createAdminAppointmentAction(formData: FormData) {
   await requireAdminActionAccess();
 
-  const payload = appointmentSchema.parse({
+  const result = appointmentSchema.safeParse({
     ownerId: formData.get("ownerId"),
     petId: formData.get("petId"),
     doctorId: formData.get("doctorId"),
@@ -500,6 +502,14 @@ export async function createAdminAppointmentAction(formData: FormData) {
     comment: formData.get("comment"),
     status: "CONFIRMED",
   });
+
+  if (!result.success) {
+    throw new Error(getFieldErrorMessage(result));
+  }
+
+  const payload = result.data;
+
+  await assertPetBelongsToOwner(payload.ownerId, payload.petId);
 
   const { date, endTime } = await assertAppointmentAvailability(payload);
 
@@ -521,6 +531,18 @@ export async function createAdminAppointmentAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function createAdminAppointmentFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await createAdminAppointmentAction(formData);
+    return { success: "Запис створено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося створити запис." };
+  }
+}
+
 export async function updateAppointmentStatusAction(formData: FormData) {
   await requireAdminActionAccess();
 
@@ -538,12 +560,150 @@ export async function updateAppointmentStatusAction(formData: FormData) {
     ])
     .parse(formData.get("status"));
 
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    select: {
+      status: true,
+      visit: {
+        select: {
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!appointment) {
+    throw new Error("Запис не знайдено.");
+  }
+
+  assertAppointmentStatusTransition({
+    current: appointment.status,
+    next: status,
+    actor: "ADMIN",
+    hasCompletedVisit: appointment.visit?.status === "COMPLETED",
+  });
+
   await prisma.appointment.update({
     where: { id: appointmentId },
     data: { status },
   });
 
   revalidateAdminData();
+}
+
+export async function updateAppointmentStatusFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await updateAppointmentStatusAction(formData);
+    return { success: "Статус запису оновлено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося оновити статус запису." };
+  }
+}
+
+export async function upsertDoctorScheduleAction(formData: FormData) {
+  await requireAdminActionAccess();
+
+  const doctorId = z.string().parse(formData.get("doctorId"));
+  const result = doctorScheduleFormSchema.safeParse({
+    weekday: formData.get("weekday"),
+    startTime: formData.get("startTime"),
+    endTime: formData.get("endTime"),
+    slotDurationMinutes: formData.get("slotDurationMinutes"),
+    breakStart: formData.get("breakStart") || undefined,
+    breakEnd: formData.get("breakEnd") || undefined,
+    isActive: formData.get("isActive") === "on",
+  });
+
+  if (!result.success) {
+    throw new Error(getDoctorScheduleFieldErrorMessage(result));
+  }
+
+  const payload = normalizeDoctorSchedulePayload(result.data);
+  assertDoctorScheduleWindow(payload);
+
+  const existingSchedule = await prisma.doctorSchedule.findFirst({
+    where: {
+      doctorId,
+      weekday: payload.weekday,
+    },
+    select: { id: true },
+  });
+
+  if (existingSchedule) {
+    await prisma.doctorSchedule.update({
+      where: { id: existingSchedule.id },
+      data: payload,
+    });
+  } else {
+    await prisma.doctorSchedule.create({
+      data: {
+        doctorId,
+        ...payload,
+      },
+    });
+  }
+
+  revalidateAdminData();
+  revalidatePath("/admin/doctors");
+  revalidatePath("/doctor/schedule");
+}
+
+export async function upsertDoctorScheduleFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await upsertDoctorScheduleAction(formData);
+    return { success: "Графік збережено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося зберегти графік." };
+  }
+}
+
+export async function deactivateDoctorScheduleAction(formData: FormData) {
+  await requireAdminActionAccess();
+
+  const doctorId = z.string().parse(formData.get("doctorId"));
+  const weekday = z.coerce.number().int().min(1).max(7).parse(formData.get("weekday"));
+  const existingSchedule = await prisma.doctorSchedule.findFirst({
+    where: {
+      doctorId,
+      weekday,
+    },
+    select: { id: true },
+  });
+
+  if (!existingSchedule) {
+    revalidateAdminData();
+    revalidatePath("/admin/doctors");
+    return;
+  }
+
+  await prisma.doctorSchedule.update({
+    where: { id: existingSchedule.id },
+    data: {
+      isActive: false,
+    },
+  });
+
+  revalidateAdminData();
+  revalidatePath("/admin/doctors");
+  revalidatePath("/doctor/schedule");
+}
+
+export async function deactivateDoctorScheduleFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await deactivateDoctorScheduleAction(formData);
+    return { success: "День вимкнено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося вимкнути день." };
+  }
 }
 
 export async function updateClientAction(formData: FormData) {
@@ -577,16 +737,65 @@ export async function updateClientAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function updateClientFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await updateClientAction(formData);
+    return { success: "Дані клієнта оновлено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося оновити клієнта." };
+  }
+}
+
 export async function deleteClientAction(formData: FormData) {
   await requireAdminActionAccess();
 
   const userId = z.string().parse(formData.get("userId"));
-
-  await prisma.user.delete({
-    where: { id: userId },
+  const ownerProfile = await prisma.ownerProfile.findUnique({
+    where: { userId },
+    select: { id: true },
   });
 
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { status: "DISABLED" },
+    }),
+    ...(ownerProfile
+      ? [
+          prisma.appointment.updateMany({
+            where: {
+              ownerId: ownerProfile.id,
+              date: {
+                gte: new Date(),
+              },
+              status: {
+                in: blockingAppointmentStatuses,
+              },
+            },
+            data: {
+              status: "CANCELLED_BY_ADMIN",
+            },
+          }),
+        ]
+      : []),
+  ]);
+
   revalidateAdminData();
+}
+
+export async function deleteClientFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await deleteClientAction(formData);
+    return { success: "Клієнта архівовано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося архівувати клієнта." };
+  }
 }
 
 export async function updatePetAction(formData: FormData) {
@@ -602,6 +811,13 @@ export async function updatePetAction(formData: FormData) {
     notes: formData.get("notes"),
   });
 
+  const pet = await prisma.pet.findUnique({
+    where: { id: petId },
+    select: { id: true, isArchived: true },
+  });
+
+  assertPetIsActive(pet, "Тварину не знайдено.");
+
   await prisma.pet.update({
     where: { id: petId },
     data: payload,
@@ -610,16 +826,48 @@ export async function updatePetAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function updatePetFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await updatePetAction(formData);
+    return { success: "Картку тварини оновлено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося оновити картку тварини." };
+  }
+}
+
 export async function deletePetAction(formData: FormData) {
   await requireAdminActionAccess();
 
   const petId = z.string().parse(formData.get("petId"));
 
-  await prisma.pet.delete({
+  const pet = await prisma.pet.findUnique({
     where: { id: petId },
+    select: { id: true, isArchived: true },
+  });
+
+  assertPetIsActive(pet, "Тварину не знайдено.");
+
+  await prisma.pet.update({
+    where: { id: petId },
+    data: buildPetArchivePayload(),
   });
 
   revalidateAdminData();
+}
+
+export async function deletePetFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await deletePetAction(formData);
+    return { success: "Тварину архівовано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося архівувати тварину." };
+  }
 }
 
 export async function updateDoctorAction(formData: FormData) {
@@ -657,32 +905,71 @@ export async function updateDoctorAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function updateDoctorFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await updateDoctorAction(formData);
+    return { success: "Дані лікаря оновлено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося оновити лікаря." };
+  }
+}
+
 export async function deleteDoctorAction(formData: FormData) {
   await requireAdminActionAccess();
 
   const userId = z.string().parse(formData.get("userId"));
   const doctorId = z.string().parse(formData.get("doctorId"));
 
-  const relationsCount = await prisma.appointment.count({
-    where: { doctorId },
+  const activeAppointments = await prisma.appointment.count({
+    where: {
+      doctorId,
+      date: {
+        gte: new Date(),
+      },
+      status: {
+        in: blockingAppointmentStatuses,
+      },
+    },
   });
 
-  if (relationsCount > 0) {
-    throw new Error("Неможливо видалити лікаря з існуючими записами.");
+  if (activeAppointments > 0) {
+    throw new Error("Неможливо архівувати лікаря з майбутніми активними записами. Спершу перенеси або скасуй їх.");
   }
 
-  await prisma.user.delete({
-    where: { id: userId },
-  });
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { status: "DISABLED" },
+    }),
+    prisma.doctor.update({
+      where: { id: doctorId },
+      data: { isActive: false },
+    }),
+  ]);
 
   revalidateAdminData();
+}
+
+export async function deleteDoctorFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await deleteDoctorAction(formData);
+    return { success: "Лікаря архівовано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося архівувати лікаря." };
+  }
 }
 
 export async function updateServiceAction(formData: FormData) {
   await requireAdminActionAccess();
 
   const serviceId = z.string().parse(formData.get("serviceId"));
-  const payload = serviceSchema.parse({
+  const result = serviceSchema.safeParse({
     name: formData.get("name"),
     slug: formData.get("slug"),
     description: formData.get("description"),
@@ -692,6 +979,12 @@ export async function updateServiceAction(formData: FormData) {
     isActive: formData.get("isActive") === "on",
     isOnlineBookable: formData.get("isOnlineBookable") === "on",
   });
+
+  if (!result.success) {
+    throw new Error(getFieldErrorMessage(result));
+  }
+
+  const payload = result.data;
 
   await prisma.service.update({
     where: { id: serviceId },
@@ -705,24 +998,43 @@ export async function updateServiceAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function updateServiceFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await updateServiceAction(formData);
+    return { success: "Послугу оновлено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося оновити послугу." };
+  }
+}
+
 export async function deleteServiceAction(formData: FormData) {
   await requireAdminActionAccess();
 
   const serviceId = z.string().parse(formData.get("serviceId"));
-
-  const relationsCount = await prisma.appointment.count({
-    where: { serviceId },
-  });
-
-  if (relationsCount > 0) {
-    throw new Error("Неможливо видалити послугу, яка вже використовується в записах.");
-  }
-
-  await prisma.service.delete({
+  await prisma.service.update({
     where: { id: serviceId },
+    data: {
+      isActive: false,
+      isOnlineBookable: false,
+    },
   });
 
   revalidateAdminData();
+}
+
+export async function deleteServiceFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await deleteServiceAction(formData);
+    return { success: "Послугу деактивовано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося деактивувати послугу." };
+  }
 }
 
 export async function updateAppointmentAction(formData: FormData) {
@@ -740,6 +1052,8 @@ export async function updateAppointmentAction(formData: FormData) {
     status: formData.get("status"),
   });
 
+  await assertPetBelongsToOwner(payload.ownerId, payload.petId);
+
   const { date, endTime } = await assertAppointmentAvailability({
     ...payload,
     appointmentId,
@@ -748,10 +1062,43 @@ export async function updateAppointmentAction(formData: FormData) {
   const existingAppointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
     select: {
+      id: true,
+      ownerId: true,
+      petId: true,
+      serviceId: true,
       doctorId: true,
       date: true,
       startTime: true,
+      status: true,
+      visit: {
+        select: {
+          status: true,
+        },
+      },
     },
+  });
+
+  if (!existingAppointment) {
+    throw new Error("Запис не знайдено.");
+  }
+
+  const mutatesCoreFields =
+    existingAppointment.ownerId !== payload.ownerId ||
+    existingAppointment.petId !== payload.petId ||
+    existingAppointment.serviceId !== payload.serviceId ||
+    existingAppointment.doctorId !== payload.doctorId ||
+    existingAppointment.startTime !== payload.startTime ||
+    existingAppointment.date.toISOString().slice(0, 10) !== payload.date;
+
+  if (isTerminalAppointmentStatus(existingAppointment.status) && mutatesCoreFields) {
+    throw new Error("Термінальний запис не можна редагувати по часу, лікарю, послузі або пацієнту.");
+  }
+
+  assertAppointmentStatusTransition({
+    current: existingAppointment.status,
+    next: payload.status ?? existingAppointment.status,
+    actor: "ADMIN",
+    hasCompletedVisit: existingAppointment.visit?.status === "COMPLETED",
   });
 
   await prisma.appointment.update({
@@ -783,12 +1130,59 @@ export async function deleteAppointmentAction(formData: FormData) {
   await requireAdminActionAccess();
 
   const appointmentId = z.string().parse(formData.get("appointmentId"));
-
-  await prisma.appointment.delete({
+  const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
+    select: {
+      status: true,
+      visit: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  if (!appointment) {
+    throw new Error("Запис не знайдено.");
+  }
+
+  if (appointment.visit?.id || appointment.status === "COMPLETED") {
+    throw new Error("Завершений запис або запис із візитом не можна видаляти. Його можна лише скасувати або залишити в історії.");
+  }
+
+  if (isTerminalAppointmentStatus(appointment.status)) {
+    if (appointment.status === "CANCELLED_BY_ADMIN") {
+      revalidateAdminData();
+      return;
+    }
+
+    throw new Error("Запис уже має фінальний статус і не може бути повторно скасований.");
+  }
+
+  assertAppointmentStatusTransition({
+    current: appointment.status,
+    next: "CANCELLED_BY_ADMIN",
+    actor: "ADMIN",
+  });
+
+  await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: { status: "CANCELLED_BY_ADMIN" },
   });
 
   revalidateAdminData();
+}
+
+export async function deleteAppointmentFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await deleteAppointmentAction(formData);
+    return { success: "Запис скасовано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося скасувати запис." };
+  }
 }
 
 export async function createScheduleBlockAction(formData: FormData) {
@@ -817,6 +1211,18 @@ export async function createScheduleBlockAction(formData: FormData) {
   });
 
   revalidateAdminData();
+}
+
+export async function createScheduleBlockFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await createScheduleBlockAction(formData);
+    return { success: "Блок часу створено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося створити блок часу." };
+  }
 }
 
 export async function updateScheduleBlockAction(formData: FormData) {
@@ -852,6 +1258,18 @@ export async function updateScheduleBlockAction(formData: FormData) {
   revalidateAdminData();
 }
 
+export async function updateScheduleBlockFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await updateScheduleBlockAction(formData);
+    return { success: "Блок часу оновлено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося оновити блок часу." };
+  }
+}
+
 export async function deleteScheduleBlockAction(formData: FormData) {
   await requireAdminActionAccess();
 
@@ -862,4 +1280,16 @@ export async function deleteScheduleBlockAction(formData: FormData) {
   });
 
   revalidateAdminData();
+}
+
+export async function deleteScheduleBlockFormAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await deleteScheduleBlockAction(formData);
+    return { success: "Блок часу видалено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося видалити блок часу." };
+  }
 }

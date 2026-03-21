@@ -5,6 +5,7 @@ import { PetCard } from "@/components/shared/pet-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
+import { isUpcomingAppointment } from "@/lib/appointments";
 import { requireCabinetAccess } from "@/lib/auth/access";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,8 @@ export default async function CabinetPage() {
     where: { userId: session.user.id },
     include: {
       pets: {
+        where: { isArchived: false },
+        orderBy: { createdAt: "desc" },
         include: {
           appointments: {
             where: { date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
@@ -45,25 +48,36 @@ export default async function CabinetPage() {
       ])
     : [0, 0];
 
+  const now = new Date();
+  const upcomingAppointments =
+    ownerProfile?.appointments.filter((appointment) =>
+      isUpcomingAppointment({
+        date: appointment.date,
+        startTime: appointment.startTime,
+        status: appointment.status,
+        now,
+      }),
+    ) ?? [];
+
   const metrics = [
     { label: "Тварин у профілі", value: String(ownerProfile?.pets.length ?? 0), Icon: PawPrint },
-    { label: "Найближчі записи", value: String(ownerProfile?.appointments.length ?? 0), Icon: CalendarDays },
+    { label: "Найближчі записи", value: String(upcomingAppointments.length), Icon: CalendarDays },
     { label: "Активні призначення", value: String(prescriptionsCount), Icon: Syringe },
     { label: "Нові документи", value: String(filesCount), Icon: FileText },
   ];
-  const nextAppointment = ownerProfile?.appointments[0];
+  const nextAppointment = upcomingAppointments[0];
 
   return (
     <div className="grid min-w-0 gap-6">
       <div className="grid min-w-0 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="min-w-0 border-[#d7e1f2] bg-[#f7f9fc] shadow-[0_20px_44px_-36px_rgba(15,23,42,0.14)]">
+        <Card className="min-w-0 border-[#d4deea] bg-[linear-gradient(180deg,#eef4fa_0%,#e7eef6_100%)] shadow-[0_20px_44px_-36px_rgba(15,23,42,0.12)]">
           <CardContent className="flex min-w-0 flex-col gap-5 p-5 md:flex-row md:items-end md:justify-between md:p-6">
             <div className="min-w-0 max-w-2xl">
               <h2 className="text-[1.85rem] font-semibold tracking-[-0.045em] text-slate-950 md:text-[2.35rem]">
-                Всі дані по тваринах, прийомах і документах зібрані в одному місці.
+                Уся інформація по тваринах і записах.
               </h2>
               <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600">
-                Користуйся картками нижче, щоб швидко перейти до тварин, найближчих записів або медичних документів після прийому.
+                Швидкий доступ до карток тварин, записів і документів.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 self-start md:self-auto">
@@ -89,7 +103,7 @@ export default async function CabinetPage() {
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 border-[#8ec8d0] bg-[#e8f6f7] text-slate-950 shadow-[0_24px_48px_-34px_rgba(42,134,146,0.28)] ring-1 ring-[#b8dde2]">
+        <Card className="min-w-0 border-[#b9d6d8] bg-[linear-gradient(180deg,#dfeef0_0%,#d6e7e9_100%)] text-slate-950 shadow-[0_24px_48px_-34px_rgba(42,134,146,0.18)] ring-1 ring-[#c9dfe1]">
           <CardContent className="space-y-4 p-5 md:p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#517984]">Найближчий запис</p>
             {nextAppointment ? (
@@ -111,7 +125,7 @@ export default async function CabinetPage() {
             ) : (
               <>
                 <p className="text-[2rem] font-semibold leading-[1.02] tracking-[-0.05em] text-slate-950">Порожній календар</p>
-                <p className="text-sm leading-7 text-slate-600">Якщо треба новий прийом, відкрий онлайн-запис і одразу обери доступний слот.</p>
+                <p className="text-sm leading-7 text-slate-600">Якщо потрібен запис, відкрийте онлайн-запис.</p>
               </>
             )}
           </CardContent>
@@ -120,14 +134,14 @@ export default async function CabinetPage() {
 
       <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metrics.map(({ label, value, Icon }) => (
-          <Card key={label} className="min-w-0 border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)] shadow-[0_14px_34px_-30px_rgba(15,23,42,0.18)]">
-            <CardContent className="flex items-center justify-between gap-4 p-5">
+          <Card key={label} className="min-w-0 border-[#d7e0ea] bg-[linear-gradient(180deg,#f8fafc_0%,#eef3f8_100%)] shadow-[0_14px_34px_-30px_rgba(15,23,42,0.14)]">
+            <CardContent className="flex min-h-[104px] items-center justify-between gap-3 p-4">
               <div>
-                <p className="text-sm leading-6 text-slate-500">{label}</p>
-                <p className="mt-1 text-[2rem] font-semibold leading-none tracking-[-0.04em] text-slate-950">{value}</p>
+                <p className="text-[0.95rem] leading-5 text-slate-500">{label}</p>
+                <p className="mt-1 text-[1.65rem] font-semibold leading-none tracking-[-0.04em] text-slate-950">{value}</p>
               </div>
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-[1.1rem] bg-[#eef3ff] text-[#1f57f2]">
-                <Icon className="size-[1.15rem]" />
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-[1rem] bg-[#eef3ff] text-[#1f57f2]">
+                <Icon className="size-[1rem]" />
               </div>
             </CardContent>
           </Card>
@@ -152,8 +166,17 @@ export default async function CabinetPage() {
                   ? `Наступна вакцинація: ${nextVaccination.nextDueDate.toLocaleDateString("uk-UA")}`
                   : null
               }
-              upcomingAppointmentsCount={pet.appointments.length}
-              note="Картка синхронізована з медичною історією, вакцинаціями і документами."
+              upcomingAppointmentsCount={
+                pet.appointments.filter((appointment) =>
+                  isUpcomingAppointment({
+                    date: appointment.date,
+                    startTime: appointment.startTime,
+                    status: appointment.status,
+                    now,
+                  }),
+                ).length
+              }
+              note="Картка синхронізована з історією, вакцинаціями і документами."
             />
           );
         })}

@@ -17,6 +17,7 @@ export type NavItem = {
   href: string;
   label: string;
   matchStartsWith?: boolean;
+  badgeCount?: number;
 };
 
 export type SummaryMetric = {

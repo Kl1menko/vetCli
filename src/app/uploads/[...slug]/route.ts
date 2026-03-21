@@ -3,6 +3,10 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { canAccessProtectedUploadByReference } from "@/lib/uploads";
+
 const mimeTypeByExtension: Record<string, string> = {
   ".pdf": "application/pdf",
   ".jpg": "image/jpeg",
@@ -10,6 +14,64 @@ const mimeTypeByExtension: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
 };
+
+async function canAccessProtectedUpload(fileUrl: string) {
+  const session = await auth();
+  const [labResult, invoice, attachment] = await Promise.all([
+    prisma.labResult.findFirst({
+      where: { fileUrl },
+      select: {
+        visit: {
+          select: {
+            doctor: { select: { userId: true } },
+            pet: { select: { owner: { select: { userId: true } } } },
+          },
+        },
+      },
+    }),
+    prisma.invoice.findFirst({
+      where: { fileUrl },
+      select: {
+        visit: {
+          select: {
+            doctor: { select: { userId: true } },
+            pet: { select: { owner: { select: { userId: true } } } },
+          },
+        },
+      },
+    }),
+    prisma.fileAsset.findFirst({
+      where: { fileUrl },
+      select: {
+        visit: {
+          select: {
+            doctor: { select: { userId: true } },
+            pet: { select: { owner: { select: { userId: true } } } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  return canAccessProtectedUploadByReference(
+    {
+      userId: session?.user?.id,
+      role: session?.user?.role,
+    },
+    {
+      doctorUserIds: [
+        labResult?.visit?.doctor.userId,
+        invoice?.visit?.doctor.userId,
+        attachment?.visit?.doctor.userId,
+      ].filter((value): value is string => Boolean(value)),
+      ownerUserIds: [
+        labResult?.visit?.pet.owner.userId,
+        invoice?.visit?.pet.owner.userId,
+        attachment?.visit?.pet.owner.userId,
+      ].filter((value): value is string => Boolean(value)),
+    },
+  );
+}
 
 export async function GET(
   _request: Request,
@@ -25,6 +87,32 @@ export async function GET(
   }
 
   const filePath = path.resolve(uploadDir, normalizedPath);
+  const fileUrl = `/uploads/${relativePath}`;
+
+  const [labResultRef, invoiceRef, attachmentRef] = await Promise.all([
+    prisma.labResult.findFirst({
+      where: { fileUrl },
+      select: { id: true },
+    }),
+    prisma.invoice.findFirst({
+      where: { fileUrl },
+      select: { id: true },
+    }),
+    prisma.fileAsset.findFirst({
+      where: { fileUrl },
+      select: { id: true },
+    }),
+  ]);
+
+  const isProtectedUpload = Boolean(labResultRef || invoiceRef || attachmentRef);
+
+  if (isProtectedUpload) {
+    const allowed = await canAccessProtectedUpload(fileUrl);
+
+    if (!allowed) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+  }
 
   try {
     const file = await readFile(filePath);

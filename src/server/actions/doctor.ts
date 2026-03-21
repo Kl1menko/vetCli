@@ -5,8 +5,16 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { assertAppointmentStatusTransition } from "@/lib/appointments";
+import { createCabinetVisitNotification } from "@/lib/notifications";
 import { canAccessDoctor } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import {
+  assertDoctorScheduleWindow,
+  doctorScheduleFormSchema,
+  getDoctorScheduleFieldErrorMessage,
+  normalizeDoctorSchedulePayload,
+} from "@/lib/schedules";
 import { storeUploadedFile } from "@/lib/storage/upload";
 
 export type DoctorActionState = {
@@ -100,6 +108,14 @@ function revalidateDoctorData(visitId?: string, petId?: string) {
   revalidatePath("/admin/invoices");
 }
 
+function revalidateDoctorScheduleData() {
+  revalidatePath("/doctor/schedule");
+  revalidatePath("/doctor");
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/doctors");
+  revalidatePath("/booking");
+}
+
 async function getDoctorAppointment(doctorId: string, appointmentId: string) {
   return prisma.appointment.findFirst({
     where: {
@@ -114,6 +130,7 @@ async function getDoctorAppointment(doctorId: string, appointmentId: string) {
       visit: {
         select: {
           id: true,
+          status: true,
         },
       },
     },
@@ -130,8 +147,108 @@ async function getDoctorVisit(doctorId: string, visitId: string) {
       id: true,
       petId: true,
       appointmentId: true,
+      status: true,
+      appointment: {
+        select: {
+          status: true,
+        },
+      },
     },
   });
+}
+
+export async function upsertOwnDoctorScheduleAction(formData: FormData) {
+  const { doctor } = await requireDoctorActionAccess();
+  const result = doctorScheduleFormSchema.safeParse({
+    weekday: formData.get("weekday"),
+    startTime: formData.get("startTime"),
+    endTime: formData.get("endTime"),
+    slotDurationMinutes: formData.get("slotDurationMinutes"),
+    breakStart: formData.get("breakStart") || undefined,
+    breakEnd: formData.get("breakEnd") || undefined,
+    isActive: formData.get("isActive") === "on",
+  });
+
+  if (!result.success) {
+    throw new Error(getDoctorScheduleFieldErrorMessage(result));
+  }
+
+  const payload = normalizeDoctorSchedulePayload(result.data);
+  assertDoctorScheduleWindow(payload);
+
+  const existingSchedule = await prisma.doctorSchedule.findFirst({
+    where: {
+      doctorId: doctor.id,
+      weekday: payload.weekday,
+    },
+    select: { id: true },
+  });
+
+  if (existingSchedule) {
+    await prisma.doctorSchedule.update({
+      where: { id: existingSchedule.id },
+      data: payload,
+    });
+  } else {
+    await prisma.doctorSchedule.create({
+      data: {
+        doctorId: doctor.id,
+        ...payload,
+      },
+    });
+  }
+
+  revalidateDoctorScheduleData();
+}
+
+export async function upsertOwnDoctorScheduleFormAction(
+  _prevState: DoctorActionState,
+  formData: FormData,
+): Promise<DoctorActionState> {
+  try {
+    await upsertOwnDoctorScheduleAction(formData);
+    return { success: "Графік збережено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося зберегти графік." };
+  }
+}
+
+export async function deactivateOwnDoctorScheduleAction(formData: FormData) {
+  const { doctor } = await requireDoctorActionAccess();
+  const weekday = z.coerce.number().int().min(1).max(7).parse(formData.get("weekday"));
+  const existingSchedule = await prisma.doctorSchedule.findFirst({
+    where: {
+      doctorId: doctor.id,
+      weekday,
+    },
+    select: { id: true },
+  });
+
+  if (!existingSchedule) {
+    revalidateDoctorScheduleData();
+    return;
+  }
+
+  await prisma.doctorSchedule.update({
+    where: { id: existingSchedule.id },
+    data: {
+      isActive: false,
+    },
+  });
+
+  revalidateDoctorScheduleData();
+}
+
+export async function deactivateOwnDoctorScheduleFormAction(
+  _prevState: DoctorActionState,
+  formData: FormData,
+): Promise<DoctorActionState> {
+  try {
+    await deactivateOwnDoctorScheduleAction(formData);
+    return { success: "День вимкнено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося вимкнути день." };
+  }
 }
 
 export async function createVisitFromAppointmentAction(formData: FormData) {
@@ -141,6 +258,10 @@ export async function createVisitFromAppointmentAction(formData: FormData) {
 
   if (!appointment) {
     throw new Error("Прийом не знайдено або доступ заборонено.");
+  }
+
+  if (!["CONFIRMED", "RESCHEDULED"].includes(appointment.status)) {
+    throw new Error("Візит можна створити лише для підтвердженого або перенесеного прийому.");
   }
 
   if (appointment.visit?.id) {
@@ -153,7 +274,7 @@ export async function createVisitFromAppointmentAction(formData: FormData) {
       appointmentId: appointment.id,
       petId: appointment.petId,
       doctorId: doctor.id,
-      status: "IN_PROGRESS",
+      status: "DRAFT",
     },
     select: {
       id: true,
@@ -164,11 +285,23 @@ export async function createVisitFromAppointmentAction(formData: FormData) {
   await prisma.appointment.update({
     where: { id: appointment.id },
     data: {
-      status: appointment.status === "COMPLETED" ? "COMPLETED" : "CONFIRMED",
+      status: "CONFIRMED",
     },
   });
 
   revalidateDoctorData(visit.id, visit.petId);
+}
+
+export async function createVisitFromAppointmentFormAction(
+  _prevState: DoctorActionState,
+  formData: FormData,
+): Promise<DoctorActionState> {
+  try {
+    await createVisitFromAppointmentAction(formData);
+    return { success: "Візит створено." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося створити візит." };
+  }
 }
 
 export async function updateVisitDetailsAction(
@@ -196,6 +329,17 @@ export async function updateVisitDetailsAction(
       return { error: parsed.error.issues[0]?.message ?? "Перевір форму візиту." };
     }
 
+    const nextAppointmentStatus = parsed.data.status === "COMPLETED" ? "COMPLETED" : "CONFIRMED";
+
+    if (nextAppointmentStatus === "COMPLETED") {
+      assertAppointmentStatusTransition({
+        current: visit.appointment.status,
+        next: "COMPLETED",
+        actor: "DOCTOR_SYSTEM",
+        hasCompletedVisit: true,
+      });
+    }
+
     await prisma.$transaction([
       prisma.visit.update({
         where: { id: visit.id },
@@ -208,6 +352,15 @@ export async function updateVisitDetailsAction(
         },
       }),
     ]);
+
+    if (parsed.data.status === "COMPLETED") {
+      await createCabinetVisitNotification({
+        visitId: visit.id,
+        section: "visits",
+        title: "Виписка після прийому готова",
+        message: "Лікар завершив візит і додав підсумки та рекомендації.",
+      });
+    }
 
     revalidateDoctorData(visit.id, visit.petId);
 
@@ -299,6 +452,13 @@ export async function createPrescriptionAction(
       },
     });
 
+    await createCabinetVisitNotification({
+      visitId: visit.id,
+      section: "prescriptions",
+      title: "Нове призначення",
+      message: `Лікар додав призначення: ${parsed.data.medicationName}.`,
+    });
+
     revalidateDoctorData(visit.id, visit.petId);
 
     return { success: "Призначення додано." };
@@ -348,6 +508,14 @@ export async function createLabResultAction(
         comment: parsed.data.comment,
         fileUrl: storedFile.fileUrl,
       },
+    });
+
+    await createCabinetVisitNotification({
+      visitId: visit.id,
+      section: "lab-results",
+      title: "Новий результат аналізу",
+      message: `Лікар додав результат: ${parsed.data.title}.`,
+      type: "LAB_RESULT_READY",
     });
 
     revalidateDoctorData(visit.id, visit.petId);
@@ -411,6 +579,14 @@ export async function upsertInvoiceAction(
       },
     });
 
+    await createCabinetVisitNotification({
+      visitId: visit.id,
+      section: "invoices",
+      title: "Оновлено чек або рахунок",
+      message: "У кабінеті з'явився новий або оновлений рахунок після прийому.",
+      type: "INVOICE_ISSUED",
+    });
+
     revalidateDoctorData(visit.id, visit.petId);
 
     return { success: "Рахунок збережено." };
@@ -463,6 +639,14 @@ export async function createVisitAttachmentAction(
         sizeBytes: storedFile.sizeBytes,
         note: parsed.data.note || null,
       },
+    });
+
+    await createCabinetVisitNotification({
+      visitId: visit.id,
+      section: "lab-results",
+      title: "Додано новий файл",
+      message: "Лікар додав новий файл до матеріалів візиту.",
+      type: "LAB_RESULT_READY",
     });
 
     revalidateDoctorData(visit.id, visit.petId);

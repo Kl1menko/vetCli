@@ -29,6 +29,7 @@ export default async function DoctorClientsPage({
     where: {
       pets: {
         some: {
+          isArchived: false,
           OR: [
             { appointments: { some: { doctorId: doctor.id } } },
             { visits: { some: { doctorId: doctor.id } } },
@@ -39,7 +40,7 @@ export default async function DoctorClientsPage({
         ? {
             OR: [
               { fullName: { contains: searchQuery, mode: "insensitive" } },
-              { pets: { some: { name: { contains: searchQuery, mode: "insensitive" } } } },
+              { pets: { some: { isArchived: false, name: { contains: searchQuery, mode: "insensitive" } } } },
             ],
           }
         : {}),
@@ -48,6 +49,7 @@ export default async function DoctorClientsPage({
     include: {
       pets: {
         where: {
+          isArchived: false,
           OR: [
             { appointments: { some: { doctorId: doctor.id } } },
             { visits: { some: { doctorId: doctor.id } } },

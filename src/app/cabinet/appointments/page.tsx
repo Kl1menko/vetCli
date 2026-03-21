@@ -1,14 +1,15 @@
 import Link from "next/link";
 
+import { ActionButtonForm } from "@/components/forms/action-button-form";
 import { AppointmentRescheduleForm } from "@/components/forms/appointment-reschedule-form";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { isUpcomingAppointment } from "@/lib/appointments";
 import { requireCabinetAccess } from "@/lib/auth/access";
 import { prisma } from "@/lib/prisma";
-import { cancelAppointmentAction, rescheduleAppointmentAction } from "@/server/actions/appointments";
+import { cancelAppointmentFormAction, rescheduleAppointmentAction } from "@/server/actions/appointments";
 import { cn } from "@/lib/utils";
 
 export default async function CabinetAppointmentsPage() {
@@ -30,8 +31,25 @@ export default async function CabinetAppointmentsPage() {
     }),
   ]);
   const now = new Date();
-  const upcomingAppointments = ownerProfile?.appointments.filter((appointment) => appointment.date >= now && !appointment.status.includes("CANCELLED")) ?? [];
-  const previousAppointments = ownerProfile?.appointments.filter((appointment) => appointment.date < now) ?? [];
+  const upcomingAppointments =
+    ownerProfile?.appointments.filter((appointment) =>
+      isUpcomingAppointment({
+        date: appointment.date,
+        startTime: appointment.startTime,
+        status: appointment.status,
+        now,
+      }),
+    ) ?? [];
+  const previousAppointments =
+    ownerProfile?.appointments.filter(
+      (appointment) =>
+        !isUpcomingAppointment({
+          date: appointment.date,
+          startTime: appointment.startTime,
+          status: appointment.status,
+          now,
+        }),
+    ) ?? [];
 
   return (
     <div className="grid gap-6">
@@ -39,10 +57,10 @@ export default async function CabinetAppointmentsPage() {
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-              Тут видно ваші найближчі записи і все, що було раніше.
+              Найближчі та попередні записи.
             </h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              Можна швидко перевірити дату, перенести візит або скасувати його без дзвінка в клініку.
+              Перегляд, перенесення і скасування без дзвінка.
             </p>
           </div>
           <Link href="/booking" className={cn(buttonVariants(), "rounded-full px-5")}>
@@ -86,16 +104,16 @@ export default async function CabinetAppointmentsPage() {
 
                 <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
                   {appointment.status !== "COMPLETED" ? (
-                    <form action={cancelAppointmentAction}>
-                      <input type="hidden" name="appointmentId" value={appointment.id} />
-                      <Button
-                        type="submit"
-                        size="sm"
-                        className="rounded-full border border-[#ef4444] bg-[#ef4444] px-4 text-white hover:bg-[#dc2626]"
-                      >
-                        Скасувати запис
-                      </Button>
-                    </form>
+                    <ActionButtonForm
+                      action={cancelAppointmentFormAction}
+                      fields={[{ name: "appointmentId", value: appointment.id }]}
+                      submitLabel="Скасувати запис"
+                      pendingLabel="Скасовую…"
+                      size="sm"
+                      successTitle="Запис скасовано"
+                      errorTitle="Не вдалося скасувати запис"
+                      buttonClassName="rounded-full border border-[#ef4444] bg-[#ef4444] px-4 text-white hover:bg-[#dc2626]"
+                    />
                   ) : null}
                 </div>
                 {appointment.status !== "COMPLETED" ? (
@@ -110,7 +128,7 @@ export default async function CabinetAppointmentsPage() {
               </div>
             ))
           ) : (
-            <EmptyState title="Поки що нічого не заплановано" description="Коли з’явиться новий запис, він одразу з’явиться тут." />
+            <EmptyState title="Записів поки немає" description="Нові записи з’являться тут." />
           )}
         </CardContent>
       </Card>
@@ -137,7 +155,7 @@ export default async function CabinetAppointmentsPage() {
               </div>
             ))
           ) : (
-            <EmptyState title="Історія ще порожня" description="Тут будуть зберігатися завершені, минулі та перенесені записи." />
+            <EmptyState title="Історія порожня" description="Тут будуть завершені, минулі та перенесені записи." />
           )}
         </CardContent>
       </Card>

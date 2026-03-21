@@ -1,8 +1,10 @@
 import Link from "next/link";
 
-import { createClientAction, deleteClientAction, updateClientAction } from "@/server/actions/admin";
+import { deleteClientFormAction } from "@/server/actions/admin";
+import { AdminClientCreateForm } from "@/components/forms/admin-client-create-form";
+import { AdminClientUpdateForm } from "@/components/forms/admin-client-update-form";
+import { ActionButtonForm } from "@/components/forms/action-button-form";
 import { EmptyState } from "@/components/shared/empty-state";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAdminAccess } from "@/lib/auth/access";
 import { prisma } from "@/lib/prisma";
@@ -21,14 +23,16 @@ export default async function AdminClientsPage({
       ? {
           OR: [
             { fullName: { contains: searchQuery, mode: "insensitive" } },
-            { pets: { some: { name: { contains: searchQuery, mode: "insensitive" } } } },
+            { pets: { some: { isArchived: false, name: { contains: searchQuery, mode: "insensitive" } } } },
           ],
         }
       : undefined,
     orderBy: { fullName: "asc" },
     include: {
       user: true,
-      pets: true,
+      pets: {
+        where: { isArchived: false },
+      },
     },
   });
 
@@ -50,22 +54,7 @@ export default async function AdminClientsPage({
           <CardTitle>Додати клієнта</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={createClientAction} className="grid gap-4">
-            <input name="fullName" placeholder="ПІБ" className="h-10 rounded-lg border border-input px-3" />
-            <input name="email" placeholder="Email" className="h-10 rounded-lg border border-input px-3" />
-            <input name="phone" placeholder="Телефон" className="h-10 rounded-lg border border-input px-3" />
-            <input
-              name="password"
-              type="password"
-              minLength={8}
-              required
-              placeholder="Тимчасовий пароль, мінімум 8 символів"
-              className="h-10 rounded-lg border border-input px-3"
-            />
-            <input name="address" placeholder="Адреса" className="h-10 rounded-lg border border-input px-3" />
-            <textarea name="notes" placeholder="Нотатки" className="min-h-24 rounded-lg border border-input px-3 py-2" />
-            <Button type="submit">Створити клієнта</Button>
-          </form>
+          <AdminClientCreateForm />
         </CardContent>
       </Card>
       <Card className="border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)]">
@@ -82,7 +71,9 @@ export default async function AdminClientsPage({
               className="h-11 rounded-lg border border-input bg-white px-3"
             />
             <div className="flex gap-3">
-              <Button type="submit">Знайти</Button>
+              <button type="submit" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">
+                Знайти
+              </button>
               {searchQuery ? (
                 <Link
                   href="/admin/clients"
@@ -103,12 +94,16 @@ export default async function AdminClientsPage({
                   <p className="text-sm text-muted-foreground">{client.phone ?? client.user.phone}</p>
                   <p className="text-sm text-muted-foreground">Тварин: {client.pets.length}</p>
                 </div>
-                <form action={deleteClientAction}>
-                  <input type="hidden" name="userId" value={client.userId} />
-                  <Button type="submit" variant="outline" size="sm">
-                    Видалити
-                  </Button>
-                </form>
+                <ActionButtonForm
+                  action={deleteClientFormAction}
+                  fields={[{ name: "userId", value: client.userId }]}
+                  submitLabel="Архівувати"
+                  pendingLabel="Архівую…"
+                  variant="outline"
+                  size="sm"
+                  successTitle="Клієнта архівовано"
+                  errorTitle="Не вдалося архівувати клієнта"
+                />
               </div>
               {client.notes ? (
                 <div className="mt-4 rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3">
@@ -118,41 +113,17 @@ export default async function AdminClientsPage({
               ) : null}
               <details className="mt-4 rounded-[1.1rem] border border-dashed border-slate-200 p-4">
                 <summary className="cursor-pointer text-sm font-medium">Редагувати</summary>
-                <form action={updateClientAction} className="mt-4 grid gap-3">
-                  <input type="hidden" name="ownerProfileId" value={client.id} />
-                  <input type="hidden" name="userId" value={client.userId} />
-                  <input
-                    name="fullName"
-                    defaultValue={client.fullName}
-                    placeholder="ПІБ"
-                    className="h-10 rounded-lg border border-input px-3"
-                  />
-                  <input
-                    name="email"
-                    defaultValue={client.email ?? client.user.email ?? ""}
-                    placeholder="Email"
-                    className="h-10 rounded-lg border border-input px-3"
-                  />
-                  <input
-                    name="phone"
-                    defaultValue={client.phone ?? client.user.phone ?? ""}
-                    placeholder="Телефон"
-                    className="h-10 rounded-lg border border-input px-3"
-                  />
-                  <input
-                    name="address"
-                    defaultValue={client.address ?? ""}
-                    placeholder="Адреса"
-                    className="h-10 rounded-lg border border-input px-3"
-                  />
-                  <textarea
-                    name="notes"
-                    defaultValue={client.notes ?? ""}
-                    placeholder="Нотатки"
-                    className="min-h-24 rounded-lg border border-input px-3 py-2"
-                  />
-                  <Button type="submit">Зберегти зміни</Button>
-                </form>
+                <AdminClientUpdateForm
+                  client={{
+                    id: client.id,
+                    userId: client.userId,
+                    fullName: client.fullName,
+                    email: client.email ?? client.user.email ?? "",
+                    phone: client.phone ?? client.user.phone ?? "",
+                    address: client.address ?? "",
+                    notes: client.notes ?? "",
+                  }}
+                />
               </details>
             </div>
           )) : (

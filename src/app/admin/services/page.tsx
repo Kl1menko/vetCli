@@ -1,5 +1,7 @@
-import { createServiceAction, deleteServiceAction, updateServiceAction } from "@/server/actions/admin";
-import { Button } from "@/components/ui/button";
+import { deleteServiceFormAction } from "@/server/actions/admin";
+import { AdminServiceCreateForm } from "@/components/forms/admin-service-create-form";
+import { AdminServiceUpdateForm } from "@/components/forms/admin-service-update-form";
+import { ActionButtonForm } from "@/components/forms/action-button-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAdminAccess } from "@/lib/auth/access";
 import { clinicServices } from "@/constants/site";
@@ -23,23 +25,7 @@ export default async function AdminServicesPage() {
           <CardTitle>Додати послугу</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={createServiceAction} className="grid gap-4">
-            <input name="name" placeholder="Назва" className="h-10 rounded-lg border border-input px-3" />
-            <input name="slug" placeholder="Системна назва для URL" className="h-10 rounded-lg border border-input px-3" />
-            <input name="category" placeholder="Категорія українською або slug напряму" className="h-10 rounded-lg border border-input px-3" />
-            <input name="durationMinutes" placeholder="Тривалість (хв)" className="h-10 rounded-lg border border-input px-3" />
-            <input name="price" placeholder="Ціна" className="h-10 rounded-lg border border-input px-3" />
-            <textarea name="description" placeholder="Опис послуги" className="min-h-24 rounded-lg border border-input px-3 py-2" />
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="isActive" defaultChecked />
-              Активна послуга
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="isOnlineBookable" defaultChecked />
-              Доступна для онлайн-запису
-            </label>
-            <Button type="submit">Створити послугу</Button>
-          </form>
+          <AdminServiceCreateForm />
         </CardContent>
       </Card>
       <Card>
@@ -57,37 +43,32 @@ export default async function AdminServicesPage() {
                   </p>
                   <p className="text-sm text-muted-foreground">{Number(service.price)} грн</p>
                 </div>
-                <form action={deleteServiceAction}>
-                  <input type="hidden" name="serviceId" value={service.id} />
-                  <Button type="submit" variant="outline" size="sm">
-                    Видалити
-                  </Button>
-                </form>
+                <ActionButtonForm
+                  action={deleteServiceFormAction}
+                  fields={[{ name: "serviceId", value: service.id }]}
+                  submitLabel="Деактивувати"
+                  pendingLabel="Деактивую…"
+                  variant="outline"
+                  size="sm"
+                  successTitle="Послугу деактивовано"
+                  errorTitle="Не вдалося деактивувати послугу"
+                />
               </div>
               <details className="mt-4 rounded-xl border border-dashed border-border p-4">
                 <summary className="cursor-pointer text-sm font-medium">Редагувати</summary>
-                <form action={updateServiceAction} className="mt-4 grid gap-3">
-                  <input type="hidden" name="serviceId" value={service.id} />
-                  <input name="name" defaultValue={service.name} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="slug" defaultValue={service.slug} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="category" defaultValue={service.category} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="durationMinutes" defaultValue={service.durationMinutes} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="price" defaultValue={Number(service.price)} className="h-10 rounded-lg border border-input px-3" />
-                  <textarea
-                    name="description"
-                    defaultValue={service.description}
-                    className="min-h-24 rounded-lg border border-input px-3 py-2"
-                  />
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="isActive" defaultChecked={service.isActive} />
-                    Активна послуга
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="isOnlineBookable" defaultChecked={service.isOnlineBookable} />
-                    Доступна для онлайн-запису
-                  </label>
-                  <Button type="submit">Зберегти зміни</Button>
-                </form>
+                <AdminServiceUpdateForm
+                  service={{
+                    id: service.id,
+                    name: service.name,
+                    slug: service.slug,
+                    category: service.category,
+                    durationMinutes: service.durationMinutes,
+                    price: Number(service.price),
+                    description: service.description,
+                    isActive: service.isActive,
+                    isOnlineBookable: service.isOnlineBookable,
+                  }}
+                />
               </details>
             </div>
           ))}

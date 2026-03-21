@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { assertPetIsActive, buildPetArchivePayload } from "@/lib/pets";
 import { prisma } from "@/lib/prisma";
 import { petSchema } from "@/lib/validations/pet";
 import { profileSchema } from "@/lib/validations/profile";
@@ -167,12 +168,15 @@ export async function updateCabinetPetAction(
       where: {
         id: petId,
         ownerId: ownerProfile.id,
+        isArchived: false,
       },
-      select: { id: true },
+      select: { id: true, isArchived: true },
     });
 
-    if (!pet) {
-      return { error: "Тварину не знайдено або доступ заборонено." };
+    try {
+      assertPetIsActive(pet, "Тварину не знайдено або доступ заборонено.");
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Тварину не знайдено або доступ заборонено." };
     }
 
     const parsed = parsePetPayload(formData);
@@ -212,19 +216,31 @@ export async function deleteCabinetPetAction(formData: FormData) {
     where: {
       id: petId,
       ownerId: ownerProfile.id,
+      isArchived: false,
     },
-    select: { id: true },
+    select: { id: true, isArchived: true },
   });
 
-  if (!pet) {
-    throw new Error("Тварину не знайдено або доступ заборонено.");
-  }
+  assertPetIsActive(pet, "Тварину не знайдено або доступ заборонено.");
 
-  await prisma.pet.delete({
+  await prisma.pet.update({
     where: { id: pet.id },
+    data: buildPetArchivePayload(),
   });
 
   revalidateCabinetData(pet.id);
+}
+
+export async function deleteCabinetPetFormAction(
+  _prevState: CabinetActionState,
+  formData: FormData,
+): Promise<CabinetActionState> {
+  try {
+    await deleteCabinetPetAction(formData);
+    return { success: "Тварину архівовано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося архівувати тварину." };
+  }
 }
 
 export async function updateCabinetProfileAction(

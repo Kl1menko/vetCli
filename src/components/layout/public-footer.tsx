@@ -10,17 +10,17 @@ export function PublicFooter() {
     <footer className="border-t border-border/60 bg-card">
       <div className="grid w-full gap-10 px-[15px] py-12 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center overflow-hidden rounded-2xl border border-border/60 bg-white shadow-sm">
-              <Image
-                src="/brand/logo.svg"
-                alt={`${clinicProfile.name} logo`}
-                width={32}
-                height={34}
-                className="size-8 object-contain"
-              />
+          <div className="flex items-center gap-4">
+            <Image
+              src="/brand/logo.svg"
+              alt={`${clinicProfile.name} logo`}
+              width={44}
+              height={48}
+              className="h-11 w-auto object-contain"
+            />
+            <div className="text-[2rem] font-semibold leading-[0.9] tracking-[-0.07em] text-[#0f2a4f] sm:text-[2.3rem]">
+              Ultra<span className="text-[#1f57f2]">Vet</span>
             </div>
-            <h3 className="text-xl font-semibold">{clinicProfile.name}</h3>
           </div>
           <p className="max-w-md text-sm leading-6 text-muted-foreground">
             Сучасна ветклініка у Львові з онлайн-записом, особистим кабінетом власника тварини, медичною історією та прозорою комунікацією після прийому.

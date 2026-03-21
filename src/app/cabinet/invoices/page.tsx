@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCabinetAccess } from "@/lib/auth/access";
+import { markCabinetNotificationsAsRead } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ const paymentStatusLabel = {
 
 export default async function CabinetInvoicesPage() {
   const session = await requireCabinetAccess();
+  await markCabinetNotificationsAsRead(session.user.id, "invoices");
   const invoices = await prisma.invoice.findMany({
     where: {
       visit: {

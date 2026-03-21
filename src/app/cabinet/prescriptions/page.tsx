@@ -1,14 +1,17 @@
 import Link from "next/link";
 
 import { EmptyState } from "@/components/shared/empty-state";
+import { PrescriptionDetailsCard } from "@/components/shared/prescription-details-card";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCabinetAccess } from "@/lib/auth/access";
+import { markCabinetNotificationsAsRead } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
 export default async function CabinetPrescriptionsPage() {
   const session = await requireCabinetAccess();
+  await markCabinetNotificationsAsRead(session.user.id, "prescriptions");
   const prescriptions = await prisma.prescription.findMany({
     where: {
       visit: {
@@ -40,10 +43,10 @@ export default async function CabinetPrescriptionsPage() {
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-              Тут зібрано все, що лікар призначив після прийому.
+              Усі призначення після прийомів.
             </h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              Зручно перевірити ліки, дозування і рекомендації для кожної тварини без пошуку по візитах.
+              Ліки, дозування і рекомендації по кожній тварині.
             </p>
           </div>
           <Link href="/cabinet/visits" className={cn(buttonVariants({ variant: "outline" }), "rounded-full px-5")}>
@@ -59,23 +62,22 @@ export default async function CabinetPrescriptionsPage() {
         <CardContent className="space-y-4">
           {prescriptions.length ? (
             prescriptions.map((prescription) => (
-              <div key={prescription.id} className="rounded-[1.5rem] border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_-34px_rgba(15,23,42,0.2)]">
-                <p className="text-lg font-semibold text-slate-950">{prescription.medicationName}</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {prescription.visit.pet.name} · {prescription.visit.appointment.doctor.fullName}
-                </p>
-                <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
-                  <p>Дозування: {prescription.dosage ?? "—"}</p>
-                  <p>Частота: {prescription.frequency ?? "—"}</p>
-                  <p>Тривалість: {prescription.duration ?? "—"}</p>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-slate-500">{prescription.instructions ?? "Інструкції відсутні."}</p>
-              </div>
+              <PrescriptionDetailsCard
+                key={prescription.id}
+                prescription={prescription}
+                className="shadow-[0_18px_44px_-34px_rgba(15,23,42,0.2)]"
+                headerSuffix={
+                  <div className="text-right text-sm text-slate-500">
+                    <p>{prescription.visit.pet.name}</p>
+                    <p>{prescription.visit.appointment.doctor.fullName}</p>
+                  </div>
+                }
+              />
             ))
           ) : (
             <EmptyState
-              title="Поки що нічого не призначено"
-              description="Коли лікар додасть лікування або рекомендації, вони з’являться тут."
+              title="Призначень поки немає"
+              description="Нові призначення з’являться тут."
             />
           )}
         </CardContent>

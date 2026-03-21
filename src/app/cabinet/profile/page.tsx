@@ -20,10 +20,10 @@ export default async function CabinetProfilePage() {
         <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-              Ваші контактні дані для записів і зв’язку з клінікою.
+              Контактні дані для записів і зв’язку.
             </h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              Саме ці дані підтягуються у записи, картки тварин і повідомлення від клініки.
+              Ці дані використовуються в записах і картках тварин.
             </p>
           </div>
           <Link href="/cabinet/appointments" className={cn(buttonVariants({ variant: "outline" }), "rounded-full px-5")}>
@@ -39,10 +39,10 @@ export default async function CabinetProfilePage() {
           ["Email", ownerProfile?.email ?? session.user.email ?? "—"],
           ["Адреса", ownerProfile?.address ?? "—"],
         ].map(([label, value]) => (
-          <Card key={label} className="border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)] shadow-[0_14px_34px_-32px_rgba(15,23,42,0.16)]">
-            <CardContent className="p-5 md:p-6">
-              <p className="text-sm text-slate-500">{label}</p>
-              <p className="mt-2 text-[1.55rem] font-semibold leading-tight tracking-[-0.03em] text-slate-950 md:text-[1.75rem]">
+          <Card key={label} className="border-[#d7e0ea] bg-[linear-gradient(180deg,#f8fafc_0%,#eef3f8_100%)] shadow-[0_14px_34px_-32px_rgba(15,23,42,0.12)]">
+            <CardContent className="p-4 md:p-5">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">{label}</p>
+              <p className="mt-1.5 text-lg font-semibold leading-snug tracking-[-0.03em] text-slate-950 md:text-xl">
                 {value}
               </p>
             </CardContent>
@@ -50,16 +50,22 @@ export default async function CabinetProfilePage() {
         ))}
       </div>
 
-      <details className="rounded-[1.75rem] border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)] p-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.16)]">
-        <summary
-          className={cn(
-            buttonVariants({ variant: "outline" }),
-            "h-11 w-fit cursor-pointer rounded-full px-5 text-slate-800 marker:hidden hover:bg-white",
-          )}
-        >
-          Редагувати профіль
+      <details className="rounded-[1.75rem] border border-[#d7e0ea] bg-[linear-gradient(180deg,#f9fbfd_0%,#f2f6fa_100%)] p-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.12)]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+          <div>
+            <p className="text-lg font-semibold text-slate-950">Редагування профілю</p>
+            <p className="mt-1 text-sm text-slate-500">Оновіть контакти і нотатки.</p>
+          </div>
+          <span
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "h-10 shrink-0 rounded-full px-5 text-slate-800 marker:hidden hover:bg-white",
+            )}
+          >
+            Редагувати
+          </span>
         </summary>
-        <div className="mt-5 border-t border-slate-100 pt-5">
+        <div className="mt-4 border-t border-slate-200 pt-4">
           <CabinetProfileForm
             action={updateCabinetProfileAction}
             profile={{
@@ -73,13 +79,13 @@ export default async function CabinetProfilePage() {
         </div>
       </details>
 
-      <Card className="border-slate-200/80 bg-slate-50">
-        <CardHeader>
+      <Card className="border-[#d4ddea] bg-[linear-gradient(135deg,#edf4ff_0%,#e4edf9_100%)] shadow-[0_16px_36px_-32px_rgba(31,87,242,0.18)]">
+        <CardHeader className="pb-3">
           <CardTitle>Важливо знати</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 text-sm leading-7 text-slate-600">
-          <p>Після збереження нові дані одразу використовуються в записах, профілі власника і картках тварин.</p>
-          <p>Саме цей профіль використовується для записів на прийом і прив’язки тварин до власника.</p>
+        <CardContent className="grid gap-3 text-sm leading-7 text-slate-700">
+          <p>Після збереження дані оновлюються у записах і картках тварин.</p>
+          <p>Цей профіль використовується для записів і привʼязки тварин.</p>
         </CardContent>
       </Card>
     </div>

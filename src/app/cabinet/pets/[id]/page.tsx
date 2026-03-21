@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
+import { PrescriptionDetailsCard } from "@/components/shared/prescription-details-card";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { VisitDischargeCard } from "@/components/shared/visit-discharge-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCabinetAccess } from "@/lib/auth/access";
@@ -16,6 +18,7 @@ export default async function PetDetailsPage({
   const pet = await prisma.pet.findFirst({
     where: {
       id,
+      isArchived: false,
       owner: {
         userId: session.user.id,
       },
@@ -30,6 +33,7 @@ export default async function PetDetailsPage({
       },
       visits: {
         include: {
+          pet: true,
           appointment: {
             include: {
               doctor: true,
@@ -113,50 +117,51 @@ export default async function PetDetailsPage({
       <Tabs defaultValue="visits" className="grid gap-4">
         <Card className="border-[#d9e4ff] bg-[linear-gradient(135deg,#f7fbff_0%,#eef4ff_100%)] shadow-[0_20px_44px_-36px_rgba(15,23,42,0.16)]">
           <CardHeader className="pb-4">
-            <CardTitle>Історія, записи і документи</CardTitle>
-            <p className="text-sm leading-7 text-slate-600">
-              Тут зібрано все важливе по цій тварині: що було на прийомах, які є призначення, аналізи, щеплення і майбутні записи.
+            <CardTitle className="text-[1.7rem] leading-tight tracking-[-0.04em] sm:text-2xl">
+              Історія, записи і документи
+            </CardTitle>
+            <p className="max-w-3xl text-sm leading-7 text-slate-600">
+              Прийоми, призначення, аналізи, щеплення і записи по цій тварині.
             </p>
           </CardHeader>
           <CardContent className="grid gap-5 pt-0">
-            <TabsList className="h-auto w-full flex-wrap justify-start gap-2 rounded-[1.75rem] border border-[#d7e6f0] bg-white/80 p-2">
-              <TabsTrigger value="visits" className="rounded-full border border-transparent px-4 py-2 text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
+            <TabsList className="!grid !h-auto !w-full grid-cols-2 gap-2 rounded-[1.5rem] border border-[#d7e6f0] bg-white/80 p-2 sm:!flex sm:flex-wrap sm:justify-start">
+              <TabsTrigger value="visits" className="!flex-none !w-full min-h-11 rounded-full border border-transparent px-3 py-2 text-sm sm:!w-auto sm:text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
                 Прийоми
               </TabsTrigger>
-              <TabsTrigger value="prescriptions" className="rounded-full border border-transparent px-4 py-2 text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
+              <TabsTrigger value="prescriptions" className="!flex-none !w-full min-h-11 rounded-full border border-transparent px-3 py-2 text-sm sm:!w-auto sm:text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
                 Призначення
               </TabsTrigger>
-              <TabsTrigger value="lab" className="rounded-full border border-transparent px-4 py-2 text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
+              <TabsTrigger value="lab" className="!flex-none !w-full min-h-11 rounded-full border border-transparent px-3 py-2 text-sm sm:!w-auto sm:text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
                 Аналізи
               </TabsTrigger>
-              <TabsTrigger value="vaccinations" className="rounded-full border border-transparent px-4 py-2 text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
+              <TabsTrigger value="vaccinations" className="!flex-none !w-full min-h-11 rounded-full border border-transparent px-3 py-2 text-sm sm:!w-auto sm:text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
                 Щеплення
               </TabsTrigger>
-              <TabsTrigger value="appointments" className="rounded-full border border-transparent px-4 py-2 text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
+              <TabsTrigger value="appointments" className="col-span-2 !flex-none !w-full min-h-11 rounded-full border border-transparent px-3 py-2 text-sm sm:col-span-1 sm:!w-auto sm:text-base data-active:border-[#2f6bff] data-active:bg-[#2f6bff] data-active:text-white data-active:shadow-[0_14px_26px_-18px_rgba(47,107,255,0.7)]">
                 Записи
               </TabsTrigger>
             </TabsList>
             <TabsContent value="visits" className="mt-0">
-              <div className="grid gap-4 rounded-[1.75rem] border border-white/80 bg-white/92 p-6">
+              <div className="grid gap-4 rounded-[1.5rem] border border-white/80 bg-white/92 p-4 sm:rounded-[1.75rem] sm:p-6">
                 {pet.visits.length ? (
                   pet.visits.map((visit) => (
-                    <div key={visit.id} className="rounded-2xl border border-border p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium">
-                            {visit.appointment.date.toLocaleDateString("uk-UA")} · {visit.appointment.service.name}
+                    <details key={visit.id} className="rounded-[1.35rem] border border-border p-4 sm:rounded-2xl">
+                      <summary className="cursor-pointer list-none">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-medium leading-6">
+                              {visit.appointment.date.toLocaleDateString("uk-UA")} · {visit.appointment.service.name}
+                            </p>
+                            <p className="text-sm text-muted-foreground">{visit.appointment.doctor.fullName}</p>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Діагнозів: {visit.diagnoses.length} · Призначень: {visit.prescriptions.length}
                           </p>
-                          <p className="text-sm text-muted-foreground">{visit.appointment.doctor.fullName}</p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          Діагнозів: {visit.diagnoses.length} · Призначень: {visit.prescriptions.length}
-                        </p>
-                      </div>
-                      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        <p>{visit.summary ?? "Підсумок ще не заповнений."}</p>
-                        <p>{visit.recommendations ?? "Рекомендації ще не додані."}</p>
-                      </div>
-                    </div>
+                      </summary>
+                      <VisitDischargeCard visit={visit} className="mt-4 border-slate-200 shadow-none ring-0" />
+                    </details>
                   ))
                 ) : (
                   <p className="text-sm text-muted-foreground">Поки що тут немає жодного завершеного прийому.</p>
@@ -164,17 +169,20 @@ export default async function PetDetailsPage({
               </div>
             </TabsContent>
             <TabsContent value="prescriptions" className="mt-0">
-              <div className="grid gap-4 rounded-[1.75rem] border border-white/80 bg-white/92 p-6">
+              <div className="grid gap-4 rounded-[1.5rem] border border-white/80 bg-white/92 p-4 sm:rounded-[1.75rem] sm:p-6">
                 {pet.visits.flatMap((visit) => visit.prescriptions).length ? (
                   pet.visits.flatMap((visit) =>
                     visit.prescriptions.map((prescription) => (
-                      <div key={prescription.id} className="rounded-2xl border border-border p-4">
-                        <p className="font-medium">{prescription.medicationName}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {prescription.dosage ?? "Дозування не вказане"} · {prescription.frequency ?? "Частота не вказана"}
-                        </p>
-                        <p className="mt-2 text-sm text-muted-foreground">{prescription.instructions ?? "Інструкції відсутні."}</p>
-                      </div>
+                      <PrescriptionDetailsCard
+                        key={prescription.id}
+                        prescription={prescription}
+                        className="border-border shadow-none"
+                        headerSuffix={
+                          <p className="text-sm text-slate-500">
+                            {visit.appointment.date.toLocaleDateString("uk-UA")}
+                          </p>
+                        }
+                      />
                     )),
                   )
                 ) : (
@@ -183,7 +191,7 @@ export default async function PetDetailsPage({
               </div>
             </TabsContent>
             <TabsContent value="lab" className="mt-0">
-              <div className="grid gap-4 rounded-[1.75rem] border border-white/80 bg-white/92 p-6">
+              <div className="grid gap-4 rounded-[1.5rem] border border-white/80 bg-white/92 p-4 sm:rounded-[1.75rem] sm:p-6">
                 {pet.visits.flatMap((visit) => [...visit.labResults, ...visit.attachments]).length ? (
                   <>
                     {pet.visits.flatMap((visit) =>
@@ -215,7 +223,7 @@ export default async function PetDetailsPage({
               </div>
             </TabsContent>
             <TabsContent value="vaccinations" className="mt-0">
-              <div className="grid gap-4 rounded-[1.75rem] border border-white/80 bg-white/92 p-6">
+              <div className="grid gap-4 rounded-[1.5rem] border border-white/80 bg-white/92 p-4 sm:rounded-[1.75rem] sm:p-6">
                 {pet.vaccinations.length ? (
                   pet.vaccinations.map((vaccination) => (
                     <div key={vaccination.id} className="rounded-2xl border border-border p-4">
@@ -233,11 +241,11 @@ export default async function PetDetailsPage({
               </div>
             </TabsContent>
             <TabsContent value="appointments" className="mt-0">
-              <div className="grid gap-4 rounded-[1.75rem] border border-white/80 bg-white/92 p-6">
+              <div className="grid gap-4 rounded-[1.5rem] border border-white/80 bg-white/92 p-4 sm:rounded-[1.75rem] sm:p-6">
                 {pet.appointments.length ? (
                   pet.appointments.map((appointment) => (
                     <div key={appointment.id} className="rounded-2xl border border-border p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                         <div>
                           <p className="font-medium">
                             {appointment.date.toLocaleDateString("uk-UA")} · {appointment.startTime}

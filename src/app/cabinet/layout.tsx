@@ -7,7 +7,7 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   return (
     <DashboardShell
       title="Мій кабінет"
-      subtitle="Усе важливе по тваринах, записах і документах зібрано тут, щоб не шукати по різних сторінках."
+      subtitle="Тварини, записи і документи в одному кабінеті."
       variant="client"
       density="compact"
       navigation={cabinetNavigation}

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import type { Diagnosis, FileAsset, Invoice, LabResult, Prescription, Visit } from "@prisma/client";
+import type { Diagnosis, FileAsset, LabResult, Prescription, Visit } from "@prisma/client";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { ActionFeedback } from "@/components/ui/action-feedback";
@@ -14,6 +14,12 @@ import { useActionToast } from "@/hooks/use-action-toast";
 import type { DoctorActionState } from "@/server/actions/doctor";
 
 const initialState: DoctorActionState = {};
+
+const diagnosisStatusLabelMap = {
+  ACTIVE: "Активний",
+  RESOLVED: "Вирішено",
+  CHRONIC: "Хронічний",
+} as const;
 
 function ActionMessage({ state }: { state: DoctorActionState }) {
   return <ActionFeedback error={state.error} success={state.success} errorTitle="Помилка" successTitle="Збережено" />;
@@ -202,7 +208,12 @@ export function InvoiceForm({
   action,
 }: {
   visitId: string;
-  invoice?: Pick<Invoice, "totalAmount" | "paymentStatus" | "fileUrl" | "note"> | null;
+  invoice?: {
+    totalAmount: string;
+    paymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
+    fileUrl: string | null;
+    note: string | null;
+  } | null;
   action: ActionFn;
 }) {
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -222,7 +233,7 @@ export function InvoiceForm({
           type="number"
           step="0.01"
           min="0"
-          defaultValue={invoice?.totalAmount?.toString() ?? ""}
+          defaultValue={invoice?.totalAmount ?? ""}
         />
       </div>
       <div className="flex flex-col gap-2">
@@ -293,7 +304,7 @@ export function ExistingDiagnoses({ diagnoses }: { diagnoses: Array<Pick<Diagnos
       {diagnoses.map((diagnosis) => (
         <div key={diagnosis.id} className="rounded-2xl border border-border p-4">
           <p className="font-medium">{diagnosis.title}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{diagnosis.status}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{diagnosisStatusLabelMap[diagnosis.status]}</p>
           <p className="mt-2 text-sm text-muted-foreground">{diagnosis.description ?? "Без опису"}</p>
         </div>
       ))}

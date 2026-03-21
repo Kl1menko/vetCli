@@ -24,6 +24,12 @@ type MobileDashboardMenuProps = {
   subtitle: string;
   navigation: NavItem[];
   accentClassName: string;
+  logoutButtonClassName?: string;
+  panelClassName?: string;
+  navSurfaceClassName?: string;
+  navHoverClassName?: string;
+  navActiveClassName?: string;
+  navInactiveDotClassName?: string;
 };
 
 export function MobileDashboardMenu({
@@ -31,6 +37,12 @@ export function MobileDashboardMenu({
   subtitle,
   navigation,
   accentClassName,
+  logoutButtonClassName,
+  panelClassName,
+  navSurfaceClassName,
+  navHoverClassName,
+  navActiveClassName,
+  navInactiveDotClassName,
 }: MobileDashboardMenuProps) {
   const [open, setOpen] = useState(false);
 
@@ -51,7 +63,10 @@ export function MobileDashboardMenu({
 
       <SheetContent
         side="left"
-        className="w-[88vw] max-w-[360px] border-r border-white/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.98)_0%,rgba(255,255,255,0.98)_100%)] p-0"
+        className={cn(
+          "w-[88vw] max-w-[360px] border-r border-white/70 p-0",
+          panelClassName ?? "bg-[linear-gradient(180deg,#f3f6fb_0%,#edf2f8_100%)]",
+        )}
       >
         <SheetHeader className="border-b border-slate-100 px-5 py-5">
           <SheetTitle className="text-lg font-semibold text-slate-950">{title}</SheetTitle>
@@ -59,10 +74,13 @@ export function MobileDashboardMenu({
         </SheetHeader>
 
         <div className="flex h-full flex-col px-4 py-4">
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-[1.5rem] bg-[#f3f6fb] p-3">
+          <div className={cn("min-h-0 flex-1 overflow-y-auto rounded-[1.5rem] p-3", navSurfaceClassName ?? "bg-[#e8eef7]")}>
             <DashboardNav
               navigation={navigation}
               accentClassName={accentClassName}
+              hoverClassName={navHoverClassName}
+              activeClassName={navActiveClassName}
+              inactiveDotClassName={navInactiveDotClassName}
               onNavigate={() => setOpen(false)}
             />
           </div>
@@ -79,7 +97,12 @@ export function MobileDashboardMenu({
               <span>На сайт</span>
               <ArrowUpRight className="size-4" />
             </Link>
-            <LogoutButton className="h-11 w-full justify-center rounded-full bg-slate-950 text-white hover:bg-slate-800" />
+            <LogoutButton
+              className={cn(
+                "h-11 w-full justify-center rounded-full",
+                logoutButtonClassName ?? "bg-[#dc2626] text-white hover:bg-[#b91c1c]",
+              )}
+            />
           </div>
         </div>
       </SheetContent>

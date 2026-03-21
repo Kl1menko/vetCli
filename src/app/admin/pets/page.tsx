@@ -1,8 +1,10 @@
 import Link from "next/link";
 
-import { createPetAction, deletePetAction, updatePetAction } from "@/server/actions/admin";
+import { deletePetFormAction } from "@/server/actions/admin";
+import { AdminPetCreateForm } from "@/components/forms/admin-pet-create-form";
+import { AdminPetUpdateForm } from "@/components/forms/admin-pet-update-form";
+import { ActionButtonForm } from "@/components/forms/action-button-form";
 import { EmptyState } from "@/components/shared/empty-state";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAdminAccess } from "@/lib/auth/access";
 import { prisma } from "@/lib/prisma";
@@ -19,14 +21,17 @@ export default async function AdminPetsPage({
   const [owners, pets] = await Promise.all([
     prisma.ownerProfile.findMany({ orderBy: { fullName: "asc" } }),
     prisma.pet.findMany({
-      where: searchQuery
-        ? {
-            OR: [
-              { name: { contains: searchQuery, mode: "insensitive" } },
-              { owner: { fullName: { contains: searchQuery, mode: "insensitive" } } },
-            ],
-          }
-        : undefined,
+      where: {
+        isArchived: false,
+        ...(searchQuery
+          ? {
+              OR: [
+                { name: { contains: searchQuery, mode: "insensitive" } },
+                { owner: { fullName: { contains: searchQuery, mode: "insensitive" } } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { name: "asc" },
       include: { owner: true },
     }),
@@ -50,21 +55,7 @@ export default async function AdminPetsPage({
           <CardTitle>Додати тварину</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={createPetAction} className="grid gap-4">
-            <select name="ownerId" className="h-10 rounded-lg border border-input px-3">
-              {owners.map((owner) => (
-                <option key={owner.id} value={owner.id}>
-                  {owner.fullName}
-                </option>
-              ))}
-            </select>
-            <input name="name" placeholder="Ім'я тварини" className="h-10 rounded-lg border border-input px-3" />
-            <input name="species" placeholder="Вид" className="h-10 rounded-lg border border-input px-3" />
-            <input name="breed" placeholder="Порода" className="h-10 rounded-lg border border-input px-3" />
-            <input name="microchipNumber" placeholder="Номер чипа" className="h-10 rounded-lg border border-input px-3" />
-            <textarea name="notes" placeholder="Нотатки" className="min-h-24 rounded-lg border border-input px-3 py-2" />
-            <Button type="submit">Додати тварину</Button>
-          </form>
+          <AdminPetCreateForm owners={owners.map((owner) => ({ id: owner.id, fullName: owner.fullName }))} />
         </CardContent>
       </Card>
       <Card className="border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbfcfe_100%)]">
@@ -81,7 +72,9 @@ export default async function AdminPetsPage({
               className="h-11 rounded-lg border border-input bg-white px-3"
             />
             <div className="flex gap-3">
-              <Button type="submit">Знайти</Button>
+              <button type="submit" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">
+                Знайти
+              </button>
               {searchQuery ? (
                 <Link
                   href="/admin/pets"
@@ -101,12 +94,16 @@ export default async function AdminPetsPage({
                   <p className="text-sm text-muted-foreground">{pet.species} · {pet.breed ?? "Без породи"}</p>
                   <p className="text-sm text-muted-foreground">Власник: {pet.owner.fullName}</p>
                 </div>
-                <form action={deletePetAction}>
-                  <input type="hidden" name="petId" value={pet.id} />
-                  <Button type="submit" variant="outline" size="sm">
-                    Видалити
-                  </Button>
-                </form>
+                <ActionButtonForm
+                  action={deletePetFormAction}
+                  fields={[{ name: "petId", value: pet.id }]}
+                  submitLabel="Архівувати"
+                  pendingLabel="Архівую…"
+                  variant="outline"
+                  size="sm"
+                  successTitle="Тварину архівовано"
+                  errorTitle="Не вдалося архівувати тварину"
+                />
               </div>
               {pet.notes ? (
                 <div className="mt-4 rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3">
@@ -116,30 +113,18 @@ export default async function AdminPetsPage({
               ) : null}
               <details className="mt-4 rounded-[1.1rem] border border-dashed border-slate-200 p-4">
                 <summary className="cursor-pointer text-sm font-medium">Редагувати</summary>
-                <form action={updatePetAction} className="mt-4 grid gap-3">
-                  <input type="hidden" name="petId" value={pet.id} />
-                  <select name="ownerId" defaultValue={pet.ownerId} className="h-10 rounded-lg border border-input px-3">
-                    {owners.map((owner) => (
-                      <option key={owner.id} value={owner.id}>
-                        {owner.fullName}
-                      </option>
-                    ))}
-                  </select>
-                  <input name="name" defaultValue={pet.name} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="species" defaultValue={pet.species} className="h-10 rounded-lg border border-input px-3" />
-                  <input name="breed" defaultValue={pet.breed ?? ""} className="h-10 rounded-lg border border-input px-3" />
-                  <input
-                    name="microchipNumber"
-                    defaultValue={pet.microchipNumber ?? ""}
-                    className="h-10 rounded-lg border border-input px-3"
-                  />
-                  <textarea
-                    name="notes"
-                    defaultValue={pet.notes ?? ""}
-                    className="min-h-24 rounded-lg border border-input px-3 py-2"
-                  />
-                  <Button type="submit">Зберегти зміни</Button>
-                </form>
+                <AdminPetUpdateForm
+                  pet={{
+                    id: pet.id,
+                    ownerId: pet.ownerId,
+                    name: pet.name,
+                    species: pet.species,
+                    breed: pet.breed ?? "",
+                    microchipNumber: pet.microchipNumber ?? "",
+                    notes: pet.notes ?? "",
+                  }}
+                  owners={owners.map((owner) => ({ id: owner.id, fullName: owner.fullName }))}
+                />
               </details>
             </div>
           )) : (

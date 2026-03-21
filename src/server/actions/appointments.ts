@@ -3,9 +3,15 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
+import {
+  assertAppointmentStatusTransition,
+  isTerminalAppointmentStatus,
+} from "@/lib/appointments";
+import { assertPetIsActive } from "@/lib/pets";
 import { prisma } from "@/lib/prisma";
 import { bookingSchema } from "@/lib/validations/appointment";
 import { getAvailableBookingSlots } from "@/server/services/appointments/availability";
+import { assertAppointmentAvailability } from "@/server/services/appointments/validation";
 
 export type AppointmentActionState = {
   error?: string;
@@ -17,14 +23,6 @@ async function getClientOwnerProfile(userId: string) {
     where: { userId },
     select: { id: true },
   });
-}
-
-function buildEndTime(startTime: string, durationMinutes: number) {
-  const [hours, minutes] = startTime.split(":").map(Number);
-  const startMinutes = hours * 60 + minutes;
-  const endMinutes = startMinutes + durationMinutes;
-
-  return `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 }
 
 export async function createAppointmentAction(formData: FormData) {
@@ -55,17 +53,14 @@ export async function createAppointmentAction(formData: FormData) {
     };
   }
 
-  const [service, pet, availableSlots] = await Promise.all([
-    prisma.service.findUnique({
-      where: { id: payload.serviceId },
-      select: { durationMinutes: true },
-    }),
+  const [pet, availableSlots] = await Promise.all([
     prisma.pet.findFirst({
       where: {
         id: payload.petId,
         ownerId: ownerProfile.id,
+        isArchived: false,
       },
-      select: { id: true },
+      select: { id: true, isArchived: true },
     }),
     getAvailableBookingSlots({
       doctorId: payload.doctorId,
@@ -74,39 +69,39 @@ export async function createAppointmentAction(formData: FormData) {
     }),
   ]);
 
-  if (!pet) {
+  try {
+    assertPetIsActive(pet, "Обрана тварина не належить Вашому кабінету.");
+  } catch (error) {
     return {
       ok: false,
-      message: "Обрана тварина не належить твоєму кабінету.",
-    };
-  }
-
-  if (!service) {
-    return {
-      ok: false,
-      message: "Послугу не знайдено.",
+      message: error instanceof Error ? error.message : "Обрана тварина не належить Вашому кабінету.",
     };
   }
 
   if (!availableSlots.includes(payload.time)) {
     return {
       ok: false,
-      message: "Обраний слот уже недоступний. Онови список часу.",
+      message: "Обраний час уже недоступний. Онови список часу.",
     };
   }
 
-  const collision = await prisma.appointment.findFirst({
-    where: {
-        doctorId: payload.doctorId,
-        date: new Date(payload.date),
-        startTime: payload.time,
-      },
-  });
+  let date: Date;
+  let endTime: string;
 
-  if (collision) {
+  try {
+    const availability = await assertAppointmentAvailability({
+      doctorId: payload.doctorId,
+      serviceId: payload.serviceId,
+      date: payload.date,
+      startTime: payload.time,
+    });
+
+    date = availability.date;
+    endTime = availability.endTime;
+  } catch (error) {
     return {
       ok: false,
-      message: "Обраний слот уже недоступний.",
+      message: error instanceof Error ? error.message : "Обраний час уже недоступний.",
     };
   }
 
@@ -119,8 +114,6 @@ export async function createAppointmentAction(formData: FormData) {
     };
   }
 
-  const endTime = buildEndTime(payload.time, service.durationMinutes);
-
   await prisma.appointment.create({
     data: {
       ownerId: ownerProfile.id,
@@ -128,7 +121,7 @@ export async function createAppointmentAction(formData: FormData) {
       doctorId: payload.doctorId,
       serviceId: payload.serviceId,
       source: "CLIENT_CABINET",
-      date: new Date(payload.date),
+      date,
       startTime: payload.time,
       endTime,
       status: "PENDING",
@@ -188,6 +181,16 @@ export async function cancelAppointmentAction(formData: FormData) {
     throw new Error("Минулий запис уже не можна скасувати з кабінету.");
   }
 
+  if (isTerminalAppointmentStatus(appointment.status)) {
+    throw new Error("Цей запис уже має фінальний статус і не може бути скасований.");
+  }
+
+  assertAppointmentStatusTransition({
+    current: appointment.status,
+    next: "CANCELLED_BY_CLIENT",
+    actor: "CLIENT",
+  });
+
   await prisma.appointment.update({
     where: { id: appointment.id },
     data: {
@@ -200,6 +203,18 @@ export async function cancelAppointmentAction(formData: FormData) {
   revalidatePath("/admin/appointments");
   revalidatePath("/admin/calendar");
   revalidatePath("/doctor/appointments");
+}
+
+export async function cancelAppointmentFormAction(
+  _prevState: AppointmentActionState,
+  formData: FormData,
+): Promise<AppointmentActionState> {
+  try {
+    await cancelAppointmentAction(formData);
+    return { success: "Запис скасовано." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Не вдалося скасувати запис." };
+  }
 }
 
 export async function rescheduleAppointmentAction(
@@ -248,6 +263,7 @@ export async function rescheduleAppointmentAction(
         petId: true,
         serviceId: true,
         comment: true,
+        status: true,
       },
     });
 
@@ -255,33 +271,41 @@ export async function rescheduleAppointmentAction(
       return { error: "Запис не знайдено або доступ заборонено." };
     }
 
-    const [service, availableSlots] = await Promise.all([
-      prisma.service.findUnique({
-        where: { id: appointment.serviceId },
-        select: { durationMinutes: true },
-      }),
-      getAvailableBookingSlots({
+    if (isTerminalAppointmentStatus(appointment.status)) {
+      return { error: "Запис уже має фінальний статус і не може бути перенесений." };
+    }
+
+    const availableSlots = await getAvailableBookingSlots({
         doctorId: payload.data.doctorId,
         serviceId: appointment.serviceId,
         date: payload.data.date,
-      }),
-    ]);
-
-    if (!service) {
-      return { error: "Послугу запису не знайдено." };
-    }
+      });
 
     if (!availableSlots.includes(payload.data.time)) {
-      return { error: "Обраний слот уже недоступний. Онови список часу." };
+      return { error: "Обраний час уже недоступний. Онови список часу." };
     }
+
+    const { date, endTime } = await assertAppointmentAvailability({
+      doctorId: payload.data.doctorId,
+      serviceId: appointment.serviceId,
+      date: payload.data.date,
+      startTime: payload.data.time,
+      appointmentId: appointment.id,
+    });
+
+    assertAppointmentStatusTransition({
+      current: appointment.status,
+      next: "RESCHEDULED",
+      actor: "CLIENT",
+    });
 
     await prisma.appointment.update({
       where: { id: appointment.id },
       data: {
         doctorId: payload.data.doctorId,
-        date: new Date(payload.data.date),
+        date,
         startTime: payload.data.time,
-        endTime: buildEndTime(payload.data.time, service.durationMinutes),
+        endTime,
         comment: payload.data.comment,
         status: "RESCHEDULED",
       },
