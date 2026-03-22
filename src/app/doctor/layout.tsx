@@ -2,8 +2,11 @@ import type { ReactNode } from "react";
 
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { doctorNavigation } from "@/constants/navigation";
+import { requireDoctorAccess } from "@/lib/auth/access";
 
-export default function DoctorLayout({ children }: { children: ReactNode }) {
+export default async function DoctorLayout({ children }: { children: ReactNode }) {
+  await requireDoctorAccess();
+
   return (
     <DashboardShell
       title="Робочий кабінет лікаря"
