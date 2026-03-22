@@ -16,31 +16,45 @@ type ClinicSettingsRow = {
 };
 
 export async function getClinicProfile(): Promise<ClinicProfile> {
-  const [settings] = await prisma.$queryRaw<ClinicSettingsRow[]>(Prisma.sql`
-    SELECT "id", "name", "city", "address", "phone", "phoneHref", "email", "hours", "closedDay"
-    FROM "ClinicSettings"
-    WHERE "id" = 'default'
-    LIMIT 1
-  `);
+  if (!process.env.DATABASE_URL) {
+    return clinicProfile;
+  }
+
+  let settings: ClinicSettingsRow | undefined;
+
+  try {
+    [settings] = await prisma.$queryRaw<ClinicSettingsRow[]>(Prisma.sql`
+      SELECT "id", "name", "city", "address", "phone", "phoneHref", "email", "hours", "closedDay"
+      FROM "ClinicSettings"
+      WHERE "id" = 'default'
+      LIMIT 1
+    `);
+  } catch {
+    return clinicProfile;
+  }
 
   if (!settings) {
-    await prisma.$executeRaw(Prisma.sql`
-      INSERT INTO "ClinicSettings" ("id", "name", "city", "address", "phone", "phoneHref", "email", "hours", "closedDay", "createdAt", "updatedAt")
-      VALUES (
-        'default',
-        ${clinicProfile.name},
-        ${clinicProfile.city},
-        ${clinicProfile.address},
-        ${clinicProfile.phone},
-        ${clinicProfile.phoneHref},
-        ${clinicProfile.email},
-        ${clinicProfile.hours},
-        ${clinicProfile.closedDay},
-        NOW(),
-        NOW()
-      )
-      ON CONFLICT ("id") DO NOTHING
-    `);
+    try {
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO "ClinicSettings" ("id", "name", "city", "address", "phone", "phoneHref", "email", "hours", "closedDay", "createdAt", "updatedAt")
+        VALUES (
+          'default',
+          ${clinicProfile.name},
+          ${clinicProfile.city},
+          ${clinicProfile.address},
+          ${clinicProfile.phone},
+          ${clinicProfile.phoneHref},
+          ${clinicProfile.email},
+          ${clinicProfile.hours},
+          ${clinicProfile.closedDay},
+          NOW(),
+          NOW()
+        )
+        ON CONFLICT ("id") DO NOTHING
+      `);
+    } catch {
+      return clinicProfile;
+    }
 
     return clinicProfile;
   }
