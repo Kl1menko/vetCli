@@ -26,6 +26,8 @@ export const clinicProfile = {
   email: "hello@ultravet.ua",
 };
 
+export type ClinicProfile = typeof clinicProfile;
+
 export const clinicServices = [
   {
     slug: "consultation",

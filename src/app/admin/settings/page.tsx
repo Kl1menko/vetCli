@@ -1,13 +1,16 @@
 import Link from "next/link";
 
+import { AdminClinicSettingsForm } from "@/components/forms/admin-clinic-settings-form";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { updateClinicSettingsAction } from "@/server/actions/admin";
 import { requireAdminAccess } from "@/lib/auth/access";
+import { getClinicProfile } from "@/lib/clinic-settings";
 import { prisma } from "@/lib/prisma";
-import { clinicProfile } from "@/constants/site";
 
 export default async function AdminSettingsPage() {
   await requireAdminAccess();
+  const clinicProfile = await getClinicProfile();
 
   const [activeDoctors, schedules, activeServices, onlineBookableServices, todayAppointments, todayPending, unpaidInvoices] =
     await Promise.all([
@@ -102,23 +105,9 @@ export default async function AdminSettingsPage() {
             <CardTitle>Контакти і режим роботи</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            {[
-              ["Назва клініки", clinicProfile.name],
-              ["Місто", clinicProfile.city],
-              ["Адреса", clinicProfile.address],
-              ["Телефон", clinicProfile.phone],
-              ["Email", clinicProfile.email],
-              ["Години роботи", clinicProfile.hours],
-              ["Вихідний", clinicProfile.closedDay],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3">
-                <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{label}</p>
-                <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
-              </div>
-            ))}
+            <AdminClinicSettingsForm action={updateClinicSettingsAction} settings={clinicProfile} />
             <p className="text-sm leading-6 text-slate-500">
-              Публічні контакти зараз беруться з конфігурації сайту. Якщо потрібно зробити їх редагованими прямо з адмінки,
-              наступним кроком варто винести їх у БД.
+              Ці поля зберігаються окремо як операційні налаштування клініки. Тут можна підтримувати актуальні контакти і режим роботи без редагування коду.
             </p>
           </CardContent>
         </Card>

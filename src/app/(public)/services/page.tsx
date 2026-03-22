@@ -1,17 +1,18 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { clinicServices } from "@/constants/site";
-import { createPageMetadata } from "@/lib/metadata";
+import { generatePageMetadata } from "@/lib/metadata";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "Послуги",
-  description:
-    "Основні послуги UltraVet: терапія, хірургія, стоматологія, УЗД, вакцинація, аналізи та супровід після прийому.",
-  path: "/services",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "Послуги",
+    description:
+      "Основні послуги UltraVet: терапія, хірургія, стоматологія, УЗД, вакцинація, аналізи та супровід після прийому.",
+    path: "/services",
+  });
+}
 
 const serviceThemes = [
   "bg-[linear-gradient(135deg,#f7faff_0%,#edf4ff_100%)]",

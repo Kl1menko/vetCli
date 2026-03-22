@@ -65,6 +65,16 @@ const serviceSchema = z.object({
   isOnlineBookable: z.boolean().optional(),
 });
 
+const clinicSettingsSchema = z.object({
+  name: z.string().trim().min(2),
+  city: z.string().trim().min(2),
+  address: z.string().trim().min(5),
+  phone: z.string().trim().min(10),
+  email: z.email(),
+  hours: z.string().trim().min(3),
+  closedDay: z.string().trim().min(2),
+});
+
 const appointmentSchema = z.object({
   ownerId: z.string().min(1),
   petId: z.string().min(1),
@@ -114,12 +124,30 @@ function revalidateAdminData() {
   revalidatePath("/admin/pets");
   revalidatePath("/admin/doctors");
   revalidatePath("/admin/services");
+  revalidatePath("/admin/settings");
   revalidatePath("/booking");
   revalidatePath("/cabinet");
   revalidatePath("/cabinet/appointments");
   revalidatePath("/cabinet/pets");
   revalidatePath("/doctor/appointments");
 }
+
+function buildPhoneHref(phone: string) {
+  const normalized = phone.replace(/[^\d+]/g, "");
+  return normalized.startsWith("+") ? `tel:${normalized}` : `tel:+${normalized}`;
+}
+
+type ClinicSettingsRow = {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+  phone: string;
+  phoneHref: string;
+  email: string;
+  hours: string;
+  closedDay: string;
+};
 
 function toDayStart(dateString: string) {
   const date = new Date(dateString);
@@ -181,6 +209,22 @@ function getFieldErrorMessage(result: z.ZodSafeParseError<unknown>) {
 
   if (issue.path[0] === "description") {
     return "Опис послуги має містити щонайменше 10 символів.";
+  }
+
+  if (issue.path[0] === "city") {
+    return "Вкажіть місто клініки.";
+  }
+
+  if (issue.path[0] === "address") {
+    return "Вкажіть адресу клініки.";
+  }
+
+  if (issue.path[0] === "hours") {
+    return "Вкажіть години роботи клініки.";
+  }
+
+  if (issue.path[0] === "closedDay") {
+    return "Вкажіть вихідний або спеціальний режим роботи.";
   }
 
   if (issue.path[0] === "ownerId") {
@@ -486,6 +530,81 @@ export async function createServiceFormAction(
     return { success: "Послугу створено." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Не вдалося створити послугу." };
+  }
+}
+
+export async function updateClinicSettingsAction(
+  _prevState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    await requireAdminActionAccess();
+
+    const parsed = clinicSettingsSchema.safeParse({
+      name: formData.get("name"),
+      city: formData.get("city"),
+      address: formData.get("address"),
+      phone: formData.get("phone"),
+      email: formData.get("email"),
+      hours: formData.get("hours"),
+      closedDay: formData.get("closedDay"),
+    });
+
+    if (!parsed.success) {
+      return { error: getFieldErrorMessage(parsed) };
+    }
+
+    const data = parsed.data;
+
+    const phoneHref = buildPhoneHref(data.phone);
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "ClinicSettings" ("id", "name", "city", "address", "phone", "phoneHref", "email", "hours", "closedDay", "createdAt", "updatedAt")
+      VALUES (
+        'default',
+        ${data.name},
+        ${data.city},
+        ${data.address},
+        ${data.phone},
+        ${phoneHref},
+        ${data.email},
+        ${data.hours},
+        ${data.closedDay},
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT ("id") DO UPDATE SET
+        "name" = EXCLUDED."name",
+        "city" = EXCLUDED."city",
+        "address" = EXCLUDED."address",
+        "phone" = EXCLUDED."phone",
+        "phoneHref" = EXCLUDED."phoneHref",
+        "email" = EXCLUDED."email",
+        "hours" = EXCLUDED."hours",
+        "closedDay" = EXCLUDED."closedDay",
+        "updatedAt" = NOW()
+    `);
+
+    const [savedSettings] = await prisma.$queryRaw<ClinicSettingsRow[]>(Prisma.sql`
+      SELECT "id", "name", "city", "address", "phone", "phoneHref", "email", "hours", "closedDay"
+      FROM "ClinicSettings"
+      WHERE "id" = 'default'
+      LIMIT 1
+    `);
+
+    if (!savedSettings) {
+      return { error: "Налаштування збережено, але не вдалося підтвердити запис у базі." };
+    }
+
+    revalidateAdminData();
+
+    return { success: "Налаштування клініки збережено." };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { error: error.message };
+    }
+
+    return { error: "Не вдалося зберегти налаштування клініки." };
   }
 }
 

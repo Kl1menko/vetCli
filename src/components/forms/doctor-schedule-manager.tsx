@@ -86,99 +86,109 @@ function DoctorScheduleRow({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto]">
-        <form action={saveFormAction} className="grid gap-2 xl:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,0.72fr))_auto]">
+      <div className="mt-4 grid gap-3">
+        <form action={saveFormAction} className="grid gap-3">
           {canEditDoctorId && doctorId ? <input type="hidden" name="doctorId" value={doctorId} /> : null}
           <input type="hidden" name="weekday" value={String(schedule.weekday)} />
 
-          <label className="grid gap-1 xl:col-span-1">
-            <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Статус дня</span>
-            <span className="flex h-9 items-center gap-2 rounded-lg border border-input bg-white px-3 text-sm">
-              <input type="checkbox" name="isActive" defaultChecked={schedule.isActive} />
-              День доступний для запису
-            </span>
-          </label>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_repeat(3,minmax(0,0.8fr))]">
+            <label className="grid gap-1">
+              <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Статус дня</span>
+              <span className="flex min-h-11 items-start gap-2 rounded-xl border border-input bg-white px-3 py-2 text-sm leading-5">
+                <input type="checkbox" name="isActive" defaultChecked={schedule.isActive} className="mt-1 shrink-0" />
+                <span>День доступний для запису</span>
+              </span>
+            </label>
 
-          <label className="grid gap-1">
-            <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Початок</span>
-            <input
-              name="startTime"
-              type="time"
-              required
-              defaultValue={schedule.startTime}
-              className="h-9 rounded-lg border border-input bg-white px-3"
-            />
-          </label>
+            <label className="grid gap-1">
+              <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Початок</span>
+              <input
+                name="startTime"
+                type="time"
+                required
+                defaultValue={schedule.startTime}
+                className="h-11 rounded-xl border border-input bg-white px-3"
+              />
+            </label>
 
-          <label className="grid gap-1">
-            <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Кінець</span>
-            <input
-              name="endTime"
-              type="time"
-              required
-              defaultValue={schedule.endTime}
-              className="h-9 rounded-lg border border-input bg-white px-3"
-            />
-          </label>
+            <label className="grid gap-1">
+              <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Кінець</span>
+              <input
+                name="endTime"
+                type="time"
+                required
+                defaultValue={schedule.endTime}
+                className="h-11 rounded-xl border border-input bg-white px-3"
+              />
+            </label>
 
-          <label className="grid gap-1">
-            <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Слот, хв</span>
-            <input
-              name="slotDurationMinutes"
-              type="number"
-              min="5"
-              step="5"
-              required
-              defaultValue={schedule.slotDurationMinutes}
-              className="h-9 rounded-lg border border-input bg-white px-3"
-            />
-          </label>
-
-          <div className="flex items-end">
-            <Button type="submit" size="sm" disabled={isSaving} className="w-full rounded-full px-4">
-              {isSaving ? "Зберігаю…" : "Зберегти день"}
-            </Button>
+            <label className="grid gap-1">
+              <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Слот, хв</span>
+              <input
+                name="slotDurationMinutes"
+                type="number"
+                min="5"
+                step="5"
+                required
+                defaultValue={schedule.slotDurationMinutes}
+                className="h-11 rounded-xl border border-input bg-white px-3"
+              />
+            </label>
           </div>
 
-          <details className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 xl:col-span-5">
-            <summary className="cursor-pointer list-none text-sm font-medium text-slate-700">
-              Перерва та додатково
-            </summary>
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Початок перерви</span>
-                <input
-                  name="breakStart"
-                  type="time"
-                  defaultValue={schedule.breakStart ?? ""}
-                  className="h-9 rounded-lg border border-input bg-white px-3"
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <details className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2">
+              <summary className="cursor-pointer list-none text-sm font-medium text-slate-700">
+                Перерва та додатково
+              </summary>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Початок перерви</span>
+                  <input
+                    name="breakStart"
+                    type="time"
+                    defaultValue={schedule.breakStart ?? ""}
+                    className="h-11 rounded-xl border border-input bg-white px-3"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Кінець перерви</span>
+                  <input
+                    name="breakEnd"
+                    type="time"
+                    defaultValue={schedule.breakEnd ?? ""}
+                    className="h-11 rounded-xl border border-input bg-white px-3"
+                  />
+                </label>
+              </div>
+              <div className="mt-3">
+                <ActionFeedback
+                  error={feedback.error}
+                  success={feedback.success}
+                  errorTitle="Не вдалося зберегти графік"
+                  successTitle="Графік оновлено"
                 />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-slate-500">Кінець перерви</span>
-                <input
-                  name="breakEnd"
-                  type="time"
-                  defaultValue={schedule.breakEnd ?? ""}
-                  className="h-9 rounded-lg border border-input bg-white px-3"
-                />
-              </label>
+              </div>
+            </details>
+
+            <div className="grid gap-2 lg:min-w-[15rem]">
+              <Button type="submit" size="sm" disabled={isSaving} className="h-11 w-full rounded-full px-4">
+                {isSaving ? "Зберігаю…" : "Зберегти день"}
+              </Button>
             </div>
-            <div className="mt-3">
-              <ActionFeedback
-                error={feedback.error}
-                success={feedback.success}
-                errorTitle="Не вдалося зберегти графік"
-                successTitle="Графік оновлено"
-              />
-            </div>
-          </details>
+          </div>
         </form>
 
-        <form action={disableFormAction} className="xl:flex xl:items-start">
+        <form action={disableFormAction}>
           {canEditDoctorId && doctorId ? <input type="hidden" name="doctorId" value={doctorId} /> : null}
           <input type="hidden" name="weekday" value={String(schedule.weekday)} />
-          <Button type="submit" variant="outline" size="sm" disabled={isDisabling} className="w-full rounded-full px-4 xl:min-w-44">
+          <Button
+            type="submit"
+            variant="outline"
+            size="sm"
+            disabled={isDisabling}
+            className="h-11 w-full rounded-full px-4 sm:w-auto sm:min-w-52"
+          >
             {isDisabling ? "Вимикаю…" : "Зробити вихідним"}
           </Button>
         </form>

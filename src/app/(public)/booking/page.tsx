@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarDays, Clock3, PawPrint, ShieldCheck, Stethoscope } from "lucide-react";
 
@@ -6,16 +5,18 @@ import { auth } from "@/auth";
 import { BookingForm } from "@/components/forms/booking-form";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
+import { generatePageMetadata } from "@/lib/metadata";
 import { prisma } from "@/lib/prisma";
-import { createPageMetadata } from "@/lib/metadata";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "Онлайн-запис",
-  description:
-    "Запишіть тварину на прийом онлайн: оберіть послугу, лікаря або будь-якого доступного спеціаліста, дату та реальний вільний час.",
-  path: "/booking",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "Онлайн-запис",
+    description:
+      "Запишіть тварину на прийом онлайн: оберіть послугу, лікаря або будь-якого доступного спеціаліста, дату та реальний вільний час.",
+    path: "/booking",
+  });
+}
 
 export default async function BookingPage() {
   const session = await auth();

@@ -1,18 +1,20 @@
-import type { Metadata } from "next";
-
-import { clinicProfile } from "@/constants/site";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Card, CardContent } from "@/components/ui/card";
-import { createPageMetadata } from "@/lib/metadata";
+import { getClinicProfile } from "@/lib/clinic-settings";
+import { generatePageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "Про клініку",
-  description:
-    "Дізнайтесь більше про підхід UltraVet у Львові: уважний сервіс, доказова ветеринарія, профілактика та супровід тварини на всіх етапах лікування.",
-  path: "/about",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "Про клініку",
+    description:
+      "Дізнайтесь більше про підхід UltraVet у Львові: уважний сервіс, доказова ветеринарія, профілактика та супровід тварини на всіх етапах лікування.",
+    path: "/about",
+  });
+}
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const clinicProfile = await getClinicProfile();
+
   return (
     <main className="w-full px-[15px] py-16">
       <SectionHeading

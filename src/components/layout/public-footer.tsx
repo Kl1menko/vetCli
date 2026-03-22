@@ -3,9 +3,13 @@ import Link from "next/link";
 
 import { ClinicPhoneLink } from "@/components/shared/clinic-phone-link";
 import { publicNavigation } from "@/constants/navigation";
-import { clinicProfile } from "@/constants/site";
+import type { ClinicProfile } from "@/constants/site";
 
-export function PublicFooter() {
+type PublicFooterProps = {
+  clinicProfile: ClinicProfile;
+};
+
+export function PublicFooter({ clinicProfile }: PublicFooterProps) {
   return (
     <footer className="border-t border-border/60 bg-card">
       <div className="grid w-full gap-10 px-[15px] py-12 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
@@ -47,7 +51,13 @@ export function PublicFooter() {
             <p>{clinicProfile.hours}</p>
             <p>{clinicProfile.closedDay}</p>
             <p>
-              <ClinicPhoneLink>{clinicProfile.phone}</ClinicPhoneLink>
+              <ClinicPhoneLink
+                phone={clinicProfile.phone}
+                phoneHref={clinicProfile.phoneHref}
+                clinicName={clinicProfile.name}
+              >
+                {clinicProfile.phone}
+              </ClinicPhoneLink>
             </p>
             <p>{clinicProfile.email}</p>
           </div>

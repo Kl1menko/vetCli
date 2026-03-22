@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -9,15 +8,18 @@ import { SectionHeading } from "@/components/shared/section-heading";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { doctorsPreview, getServiceCategoryCountLabel } from "@/constants/site";
-import { createPageMetadata } from "@/lib/metadata";
+import { getClinicProfile } from "@/lib/clinic-settings";
+import { generatePageMetadata } from "@/lib/metadata";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "Ветклініка UltraVet у Львові",
-  description:
-    "Сучасна ветеринарна клініка у Львові з онлайн-записом, профілями лікарів, зрозумілими цінами та кабінетом власника тварини.",
-  path: "/",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "Ветклініка UltraVet у Львові",
+    description:
+      "Сучасна ветеринарна клініка у Львові з онлайн-записом, профілями лікарів, зрозумілими цінами та кабінетом власника тварини.",
+    path: "/",
+  });
+}
 
 const servicesShowcase = [
   {
@@ -204,12 +206,14 @@ const homepageReviewImages = [
 
 export default async function HomePage() {
   const session = await auth();
+  const clinicProfile = await getClinicProfile();
 
   return (
     <main>
       <PublicHero
         isAuthenticated={Boolean(session?.user)}
         role={session?.user?.role ?? null}
+        clinicProfile={clinicProfile}
       />
 
       <section className="w-full px-[15px] pb-20 pt-10 md:pb-20 md:pt-14">

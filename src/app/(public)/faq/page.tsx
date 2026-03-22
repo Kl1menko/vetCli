@@ -1,15 +1,15 @@
-import type { Metadata } from "next";
-
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createPageMetadata } from "@/lib/metadata";
+import { generatePageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "FAQ",
-  description:
-    "Поширені питання про онлайн-запис, підготовку до прийому, оплату, аналізи та документи після візиту до UltraVet.",
-  path: "/faq",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "FAQ",
+    description:
+      "Поширені питання про онлайн-запис, підготовку до прийому, оплату, аналізи та документи після візиту до UltraVet.",
+    path: "/faq",
+  });
+}
 
 export default function FaqPage() {
   return (

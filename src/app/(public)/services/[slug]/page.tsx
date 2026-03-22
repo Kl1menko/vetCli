@@ -6,14 +6,14 @@ import { notFound } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  clinicProfile,
   clinicServices,
   getClinicServiceBySlug,
   getServiceCategoryCountLabel,
   getServiceCategoryLabel,
   getServicesByCategory,
 } from "@/constants/site";
-import { createPageMetadata } from "@/lib/metadata";
+import { getClinicProfile } from "@/lib/clinic-settings";
+import { generatePageMetadata as generateSharedPageMetadata } from "@/lib/metadata";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -29,14 +29,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const service = getClinicServiceBySlug(slug);
 
   if (!service) {
-    return createPageMetadata({
+    return generateSharedPageMetadata({
       title: "Послуга не знайдена",
       description: "Опис обраної послуги не знайдено.",
       path: `/services/${slug}`,
     });
   }
 
-  return createPageMetadata({
+  return generateSharedPageMetadata({
     title: service.title,
     description: service.shortDescription,
     path: `/services/${service.slug}`,
@@ -46,6 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ServiceDetailsPage({ params }: Props) {
   const { slug } = await params;
   const service = getClinicServiceBySlug(slug);
+  const clinicProfile = await getClinicProfile();
 
   if (!service) {
     notFound();

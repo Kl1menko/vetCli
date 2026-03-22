@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-import { clinicProfile } from "@/constants/site";
+import { getClinicProfile } from "@/lib/clinic-settings";
 
 export const size = {
   width: 1200,
@@ -9,7 +9,9 @@ export const size = {
 
 export const contentType = "image/png";
 
-export default function OpenGraphImage() {
+export default async function OpenGraphImage() {
+  const clinicProfile = await getClinicProfile();
+
   return new ImageResponse(
     (
       <div

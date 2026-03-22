@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 
 import { ToastViewport } from "@/components/ui/toast";
+import { getClinicProfile } from "@/lib/clinic-settings";
 import { getSiteUrl, siteMetadata } from "@/lib/metadata";
 import "./globals.css";
 
@@ -37,55 +38,59 @@ const gilroySans = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  metadataBase: getSiteUrl(),
-  title: {
-    default: siteMetadata.title,
-    template: `%s | ${siteMetadata.shortTitle}`,
-  },
-  description: siteMetadata.description,
-  applicationName: siteMetadata.shortTitle,
-  keywords: [...siteMetadata.keywords],
-  authors: [{ name: siteMetadata.shortTitle }],
-  creator: siteMetadata.shortTitle,
-  publisher: siteMetadata.shortTitle,
-  category: "healthcare",
-  alternates: {
-    canonical: "/",
-  },
-  openGraph: {
-    title: siteMetadata.title,
+export async function generateMetadata(): Promise<Metadata> {
+  const clinicProfile = await getClinicProfile();
+
+  return {
+    metadataBase: getSiteUrl(),
+    title: {
+      default: `${clinicProfile.name} | Ветклініка у Львові`,
+      template: `%s | ${clinicProfile.name}`,
+    },
     description: siteMetadata.description,
-    url: "/",
-    siteName: siteMetadata.shortTitle,
-    locale: siteMetadata.locale,
-    type: "website",
-    images: [
-      {
-        url: "/opengraph-image",
-        width: 1200,
-        height: 630,
-        alt: `${siteMetadata.shortTitle} — ветклініка у Львові`,
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: siteMetadata.title,
-    description: siteMetadata.description,
-    images: ["/twitter-image"],
-  },
-  icons: {
-    icon: [
-      { url: "/favicon.ico" },
-      { url: "/brand/logo.svg", type: "image/svg+xml" },
-      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
-    ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-    shortcut: ["/favicon.ico"],
-  },
-  manifest: "/site.webmanifest",
-};
+    applicationName: clinicProfile.name,
+    keywords: [...siteMetadata.keywords],
+    authors: [{ name: clinicProfile.name }],
+    creator: clinicProfile.name,
+    publisher: clinicProfile.name,
+    category: "healthcare",
+    alternates: {
+      canonical: "/",
+    },
+    openGraph: {
+      title: `${clinicProfile.name} | Ветклініка у Львові`,
+      description: siteMetadata.description,
+      url: "/",
+      siteName: clinicProfile.name,
+      locale: siteMetadata.locale,
+      type: "website",
+      images: [
+        {
+          url: "/opengraph-image",
+          width: 1200,
+          height: 630,
+          alt: `${clinicProfile.name} — ветклініка у Львові`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${clinicProfile.name} | Ветклініка у Львові`,
+      description: siteMetadata.description,
+      images: ["/twitter-image"],
+    },
+    icons: {
+      icon: [
+        { url: "/favicon.ico" },
+        { url: "/brand/logo.svg", type: "image/svg+xml" },
+        { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      ],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+      shortcut: ["/favicon.ico"],
+    },
+    manifest: "/site.webmanifest",
+  };
+}
 
 export default function RootLayout({
   children,

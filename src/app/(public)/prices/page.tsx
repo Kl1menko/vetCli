@@ -1,16 +1,16 @@
-import type { Metadata } from "next";
-
 import { pricingPreview } from "@/constants/site";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createPageMetadata } from "@/lib/metadata";
+import { generatePageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "Ціни",
-  description:
-    "Орієнтовні ціни на базові ветеринарні послуги в UltraVet: первинний прийом, вакцинація, УЗД та стоматологія.",
-  path: "/prices",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "Ціни",
+    description:
+      "Орієнтовні ціни на базові ветеринарні послуги в UltraVet: первинний прийом, вакцинація, УЗД та стоматологія.",
+    path: "/prices",
+  });
+}
 
 export default function PricesPage() {
   return (

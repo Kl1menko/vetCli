@@ -1,16 +1,16 @@
-import type { Metadata } from "next";
-
 import { doctorsPreview } from "@/constants/site";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createPageMetadata } from "@/lib/metadata";
+import { generatePageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "Лікарі",
-  description:
-    "Познайомтесь із командою UltraVet: спеціалізації лікарів, напрямки роботи та короткі профілі перед записом на прийом.",
-  path: "/doctors",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "Лікарі",
+    description:
+      "Познайомтесь із командою UltraVet: спеціалізації лікарів, напрямки роботи та короткі профілі перед записом на прийом.",
+    path: "/doctors",
+  });
+}
 
 export default function DoctorsPage() {
   return (

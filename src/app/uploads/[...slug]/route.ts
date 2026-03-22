@@ -5,6 +5,8 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getStorageDriver } from "@/lib/storage";
+import { downloadS3Object } from "@/lib/storage/s3";
 import { canAccessProtectedUploadByReference } from "@/lib/uploads";
 
 const mimeTypeByExtension: Record<string, string> = {
@@ -78,6 +80,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string[] }> },
 ) {
   const { slug } = await params;
+  const driver = getStorageDriver();
   const uploadDir = process.env.UPLOAD_LOCAL_DIR ?? "./uploads";
   const relativePath = slug.join("/");
   const normalizedPath = path.normalize(relativePath);
@@ -115,6 +118,17 @@ export async function GET(
   }
 
   try {
+    if (driver === "s3") {
+      const file = await downloadS3Object(normalizedPath);
+
+      return new NextResponse(Buffer.from(file.bytes), {
+        headers: {
+          "Content-Type": file.contentType,
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    }
+
     const file = await readFile(filePath);
     const extension = path.extname(filePath).toLowerCase();
 
@@ -124,7 +138,22 @@ export async function GET(
         "Cache-Control": "private, max-age=3600",
       },
     });
-  } catch {
+  } catch (error) {
+    if (
+      driver === "s3" &&
+      error &&
+      typeof error === "object" &&
+      ("name" in error || "$metadata" in error)
+    ) {
+      const knownError = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+
+      if (knownError.name === "NoSuchKey" || knownError.$metadata?.httpStatusCode === 404) {
+        return new NextResponse("Not found", { status: 404 });
+      }
+
+      return new NextResponse("Storage error", { status: 500 });
+    }
+
     return new NextResponse("Not found", { status: 404 });
   }
 }

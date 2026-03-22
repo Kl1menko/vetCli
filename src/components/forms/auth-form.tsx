@@ -11,16 +11,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { clinicProfile } from "@/constants/site";
+import type { ClinicProfile } from "@/constants/site";
 import { useActionToast } from "@/hooks/use-action-toast";
 
 type AuthFormProps = {
   mode: "login" | "register";
+  clinicProfile: ClinicProfile;
 };
 
 const initialState: AuthActionState = {};
 
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, clinicProfile }: AuthFormProps) {
   const action = mode === "login" ? loginAction : registerOwnerAction;
   const [state, formAction, isPending] = useActionState(action, initialState);
   useActionToast(state, {

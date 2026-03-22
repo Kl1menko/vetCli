@@ -180,6 +180,20 @@ model Service {
   appointments     Appointment[]
 }
 
+model ClinicSettings {
+  id        String   @id @default("default")
+  name      String
+  city      String
+  address   String
+  phone     String
+  phoneHref String
+  email     String
+  hours     String
+  closedDay String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model DoctorSchedule {
   id                  String   @id @default(cuid())
   doctorId            String

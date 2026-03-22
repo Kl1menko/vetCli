@@ -1,15 +1,15 @@
-import type { Metadata } from "next";
-
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Card, CardContent } from "@/components/ui/card";
-import { createPageMetadata } from "@/lib/metadata";
+import { generatePageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = createPageMetadata({
-  title: "Відгуки",
-  description:
-    "Відгуки клієнтів UltraVet про турботу лікарів, зручний онлайн-запис та зрозумілу комунікацію після прийому.",
-  path: "/reviews",
-});
+export async function generateMetadata() {
+  return generatePageMetadata({
+    title: "Відгуки",
+    description:
+      "Відгуки клієнтів UltraVet про турботу лікарів, зручний онлайн-запис та зрозумілу комунікацію після прийому.",
+    path: "/reviews",
+  });
+}
 
 export default function ReviewsPage() {
   return (

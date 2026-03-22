@@ -74,9 +74,9 @@ export function StatCard({ label, value, hint }: StatCardProps) {
       ref={ref}
       className="border border-[#d9e4ff] bg-white shadow-[0_24px_50px_-38px_rgba(15,23,42,0.14)]"
     >
-      <CardContent className="flex min-h-[10.5rem] flex-col items-center justify-center gap-2.5 px-6 py-6 text-center sm:min-h-[14rem] sm:gap-4 sm:px-8 sm:py-8">
+      <CardContent className="flex min-h-[10.5rem] flex-col items-center justify-center gap-2.5 px-6 py-6 text-center sm:min-h-[11rem] sm:gap-3 sm:px-7 sm:py-6 md:min-h-[9.5rem]">
         <span className="text-[0.95rem] font-medium tracking-[-0.01em] text-slate-500 sm:text-sm">{label}</span>
-        <span className="text-[3rem] font-semibold leading-none tracking-[-0.06em] text-[#102749] sm:text-5xl md:text-6xl">
+        <span className="text-[3rem] font-semibold leading-none tracking-[-0.06em] text-[#102749] sm:text-5xl md:text-[3.25rem]">
           {animatedValue ? displayValue : value}
         </span>
         <p className="max-w-[18rem] text-[0.95rem] leading-5 text-slate-500 sm:max-w-[20rem] sm:text-sm sm:leading-6">{hint}</p>

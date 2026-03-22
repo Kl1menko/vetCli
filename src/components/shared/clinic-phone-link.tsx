@@ -4,16 +4,25 @@ import { cn } from "@/lib/utils";
 type ClinicPhoneLinkProps = {
   className?: string;
   children?: React.ReactNode;
+  phone?: string;
+  phoneHref?: string;
+  clinicName?: string;
 };
 
-export function ClinicPhoneLink({ className, children }: ClinicPhoneLinkProps) {
+export function ClinicPhoneLink({
+  className,
+  children,
+  phone = clinicProfile.phone,
+  phoneHref = clinicProfile.phoneHref,
+  clinicName = clinicProfile.name,
+}: ClinicPhoneLinkProps) {
   return (
     <a
-      href={clinicProfile.phoneHref}
+      href={phoneHref}
       className={cn("transition-colors hover:text-primary", className)}
-      aria-label={`Зателефонувати в ${clinicProfile.name} за номером ${clinicProfile.phone}`}
+      aria-label={`Зателефонувати в ${clinicName} за номером ${phone}`}
     >
-      {children ?? clinicProfile.phone}
+      {children ?? phone}
     </a>
   );
 }

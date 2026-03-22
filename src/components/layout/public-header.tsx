@@ -7,16 +7,17 @@ import { LayoutDashboard, Menu, X } from "lucide-react";
 import { useState } from "react";
 
 import { publicNavigation } from "@/constants/navigation";
-import { clinicProfile } from "@/constants/site";
+import type { ClinicProfile } from "@/constants/site";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 type PublicHeaderProps = {
   accountHref: string;
   isAuthenticated: boolean;
+  clinicProfile: ClinicProfile;
 };
 
-export function PublicHeader({ accountHref, isAuthenticated }: PublicHeaderProps) {
+export function PublicHeader({ accountHref, isAuthenticated, clinicProfile }: PublicHeaderProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 

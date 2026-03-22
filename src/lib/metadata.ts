@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { clinicProfile } from "@/constants/site";
+import { getClinicProfile } from "@/lib/clinic-settings";
 
 const defaultBaseUrl = "http://localhost:3000";
 
@@ -15,9 +15,9 @@ export function getSiteUrl() {
 }
 
 export const siteMetadata = {
-  name: clinicProfile.name,
-  title: `${clinicProfile.name} | Ветклініка у Львові`,
-  shortTitle: clinicProfile.name,
+  name: "UltraVet",
+  title: "UltraVet | Ветклініка у Львові",
+  shortTitle: "UltraVet",
   description:
     "Сучасна ветклініка у Львові з онлайн-записом, профілями лікарів, кабінетом власника тварини та прозорою медичною історією.",
   locale: "uk_UA",
@@ -31,7 +31,7 @@ export const siteMetadata = {
   ],
 } as const;
 
-export function createPageMetadata({
+export async function generatePageMetadata({
   title,
   description,
   path = "/",
@@ -39,7 +39,8 @@ export function createPageMetadata({
   title: string;
   description: string;
   path?: string;
-}): Metadata {
+}): Promise<Metadata> {
+  const clinicProfile = await getClinicProfile();
   const siteUrl = getSiteUrl();
   const canonical = new URL(path, siteUrl).toString();
   const image = new URL("/opengraph-image", siteUrl).toString();
@@ -54,7 +55,7 @@ export function createPageMetadata({
       title,
       description,
       url: canonical,
-      siteName: siteMetadata.shortTitle,
+      siteName: clinicProfile.name,
       locale: siteMetadata.locale,
       type: "website",
       images: [
@@ -62,7 +63,7 @@ export function createPageMetadata({
           url: image,
           width: 1200,
           height: 630,
-          alt: `${siteMetadata.shortTitle} — ${description}`,
+          alt: `${clinicProfile.name} — ${description}`,
         },
       ],
     },
@@ -73,4 +74,12 @@ export function createPageMetadata({
       images: [image],
     },
   };
+}
+
+export function createPageMetadata(args: {
+  title: string;
+  description: string;
+  path?: string;
+}) {
+  return generatePageMetadata(args);
 }
